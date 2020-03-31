@@ -143,16 +143,17 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 // Interface function to assembly code
 func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
-	var bufs [8]int32 = [8]int32{64, 1024+64, 2048+64, 3*1024+64, 4*1024+64, 5*1024+64, 6*1024+64, 7*1024+64}
+	bufs := [8]int32{4, 64+4, 2*64+4, 3*64+4, 4*64+4, 5*64+4, 6*64+4, 7*64+4}
 
-	base := bytes.Repeat([]byte("a"), 1024)
-	base = append(base, bytes.Repeat([]byte("b"), 1024)...)
-	base = append(base, bytes.Repeat([]byte("c"), 1024)...)
-	base = append(base, bytes.Repeat([]byte("d"), 1024)...)
-	base = append(base, bytes.Repeat([]byte("e"), 1024)...)
-	base = append(base, bytes.Repeat([]byte("f"), 1024)...)
-	base = append(base, bytes.Repeat([]byte("g"), 1024)...)
-	base = append(base, bytes.Repeat([]byte("h"), 1024)...)
+	base := bytes.Repeat([]byte("*"), 4)
+	base = append(base, bytes.Repeat([]byte("a"), 64)...)
+	base = append(base, bytes.Repeat([]byte("b"), 64)...)
+	base = append(base, bytes.Repeat([]byte("c"), 64)...)
+	base = append(base, bytes.Repeat([]byte("d"), 64)...)
+	base = append(base, bytes.Repeat([]byte("e"), 64)...)
+	base = append(base, bytes.Repeat([]byte("f"), 64)...)
+	base = append(base, bytes.Repeat([]byte("g"), 64)...)
+	base = append(base, bytes.Repeat([]byte("h"), 64)...)
 
 	var cache cache8 // stack storage for block8 tmp state
 
