@@ -156,11 +156,43 @@ func blockMd5(digests *[128]byte, input [8][]byte/*, mask []uint64*/) [8][Size]b
 
 	var bufs [8]int32
 
-	base := bytes.Repeat([]byte("a"), 1024)
+	base := bytes.Repeat([]byte("h"), 1024)
 
 	var cache cache8 // stack storage for block8 tmp state
 
 	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64 /*n*/)
+
+	//if s.v0[0] != 0x89d4ff56 || s.v1[0] != 0x125cd962 || s.v2[0] != 0x69cade33 || s.v3[0] != 0x0033e325 { // aaaaa
+	//	panic("Error in lane 1")
+	//}
+
+	//if s.v0[0] != 0xf230419a || s.v1[0] != 0x5009fe4e || s.v2[0] != 0xbac6852f || s.v3[0] != 0xe631cc2f { // bbbbb
+	//	panic("Error in lane 1")
+	//}
+
+	//if s.v0[0] != 0xb6679971 || s.v1[0] != 0x5767705a || s.v2[0] != 0x16296ec1 || s.v3[0] != 0x2556a2f2 { // ccccc
+	//	panic("Error in lane 1")
+	//}
+
+	//if s.v0[0] != 0xd2d0e59c || s.v1[0] != 0x6f1aa3d8 || s.v2[0] != 0x8b8bdf88 || s.v3[0] != 0x9f4c6912 { // ddddd
+	//	panic("Error in lane 1")
+	//}
+
+	//if s.v0[0] != 0x441e8ef1 || s.v1[0] != 0xafeb8e56 || s.v2[0] != 0x6d00d8ae || s.v3[0] != 0x91921784 { // eeeee
+	//	panic("Error in lane 1")
+	//}
+
+	//if s.v0[0] != 0x4a3fdc71 || s.v1[0] != 0x6645d0bb || s.v2[0] != 0x84d4e6a6 || s.v3[0] != 0xd6ea6f44 { // fffff
+	//	panic("Error in lane 1")
+	//}
+
+	//if s.v0[0] != 0x698884d3 || s.v1[0] != 0xdc5ba7ad || s.v2[0] != 0xebf7c759 || s.v3[0] != 0x4208b0db { // ggggg
+	//	panic("Error in lane 1")
+	//}
+
+	if s.v0[0] != 0x53a1b03e || s.v1[0] != 0x66d53e23 || s.v2[0] != 0xafdc6126 || s.v3[0] != 0xb39c4fdd { // hhhhh
+		panic("Error in lane 1")
+	}
 
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v0[0], s.v0[1], s.v0[2], s.v0[3], s.v0[4], s.v0[5], s.v0[6], s.v0[7])
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v1[0], s.v1[1], s.v1[2], s.v1[3], s.v1[4], s.v1[5], s.v1[6], s.v1[7])
