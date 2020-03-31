@@ -34,8 +34,11 @@ const BlockSize = 64
 const Size = 16
 const chunk = BlockSize
 
-//go:noescape
-//func sha256X16Avx512(digests *[512]byte, scratch *[512]byte, table *[512]uint64, mask []uint64, inputs [16][]byte)
+// MD5 initialization constants
+const init0 = 0x67452301
+const init1 = 0xefcdab89
+const init2 = 0x98badcfe
+const init3 = 0x10325476
 
 // Md5ServerUID - Do not start at 0 but next multiple of 8 so as to be able to
 // differentiate with default initialiation value of 0
@@ -138,21 +141,7 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 }
 
 // Interface function to assembly code
-func blockMd5(digests *[128]byte, input [8][]byte/*, mask []uint64*/) [8][Size]byte {
-
-	var s digest8
-
-	s.v0[0] = 0x67452301
-	s.v1[0] = 0xefcdab89
-	s.v2[0] = 0x98badcfe
-	s.v3[0] = 0x10325476
-
-	for i := 1; i < 8; i++ {
-		s.v0[i] = s.v0[i-1]
-		s.v1[i] = s.v1[i-1]
-		s.v2[i] = s.v2[i-1]
-		s.v3[i] = s.v3[i-1]
-	}
+func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
 	var bufs [8]int32 = [8]int32{64, 1024+64, 2048+64, 3*1024+64, 4*1024+64, 5*1024+64, 6*1024+64, 7*1024+64}
 
@@ -205,13 +194,6 @@ func blockMd5(digests *[128]byte, input [8][]byte/*, mask []uint64*/) [8][Size]b
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v1[0], s.v1[1], s.v1[2], s.v1[3], s.v1[4], s.v1[5], s.v1[6], s.v1[7])
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v2[0], s.v2[1], s.v2[2], s.v2[3], s.v2[4], s.v2[5], s.v2[6], s.v2[7])
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v3[0], s.v3[1], s.v3[2], s.v3[3], s.v3[4], s.v3[5], s.v3[6], s.v3[7])
-
-	output := [8][Size]byte{}
-	for i := 0; i < 8; i++ {
-		output[i] = getDigest(i, digests[:])
-	}
-
-	return output
 }
 
 func getDigest(index int, state []byte) (sum [Size]byte) {
@@ -323,17 +305,18 @@ func (md5srv *Md5Server) blocks() {
 	}
 
 //	mask := expandMask(genMask(md5srv))
-	outputs := blockMd5(md5srv.getDigests(), inputs) // , mask)
+	state := md5srv.getDigests()
+	blockMd5(&state, inputs) // , mask)
 
 	md5srv.totalIn = 0
-	for i := 0; i < len(outputs); i++ {
+	for i := 0; i < len( md5srv.lanes); i++ {
 		uid, outputCh := md5srv.lanes[i].uid, md5srv.lanes[i].outputCh
-		md5srv.digests[uid] = outputs[i]
+		md5srv.digests[uid] = [Size]byte{} /* outputs[i] */
 		md5srv.lanes[i] = Md5LaneInfo{}
 
 		if outputCh != nil {
 			// Send back result
-			outputCh <- outputs[i]
+			outputCh <- [Size]byte{} /* outputs[i] */
 			delete(md5srv.digests, uid) // Delete entry from hashmap
 		}
 	}
@@ -351,23 +334,22 @@ func (md5srv *Md5Server) Sum(uid uint64, p []byte) [16]byte {
 	return <-sumCh
 }
 
-func (md5srv *Md5Server) getDigests() *[128]byte {
-	digests := [128]byte{}
+func (md5srv *Md5Server) getDigests() (s digest8) {
 	for i, lane := range md5srv.lanes {
 		a, ok := md5srv.digests[lane.uid]
 		if ok {
-			binary.BigEndian.PutUint32(digests[(i+0*8)*4:], binary.LittleEndian.Uint32(a[0:4]))
-			binary.BigEndian.PutUint32(digests[(i+1*8)*4:], binary.LittleEndian.Uint32(a[4:8]))
-			binary.BigEndian.PutUint32(digests[(i+2*8)*4:], binary.LittleEndian.Uint32(a[8:12]))
-			binary.BigEndian.PutUint32(digests[(i+3*8)*4:], binary.LittleEndian.Uint32(a[12:16]))
+			s.v0[i] = binary.LittleEndian.Uint32(a[0:4])
+			s.v1[i] = binary.LittleEndian.Uint32(a[4:8])
+			s.v2[i] = binary.LittleEndian.Uint32(a[8:12])
+			s.v2[i] = binary.LittleEndian.Uint32(a[12:16])
 		} else {
-			binary.LittleEndian.PutUint32(digests[(i+0*8)*4:], 0) // init0)
-			binary.LittleEndian.PutUint32(digests[(i+1*8)*4:], 0) // init1)
-			binary.LittleEndian.PutUint32(digests[(i+2*8)*4:], 0) // init2)
-			binary.LittleEndian.PutUint32(digests[(i+3*8)*4:], 0) // init3)
+			s.v0[i] = init0
+			s.v1[i] = init1
+			s.v2[i] = init2
+			s.v3[i] = init3
 		}
 	}
-	return &digests
+	return
 }
 
 // Helper struct for sorting blocks based on length
