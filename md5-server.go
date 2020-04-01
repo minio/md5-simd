@@ -34,15 +34,17 @@ const Size = 16
 const chunk = BlockSize
 
 // MD5 initialization constants
-const init0 = 0x67452301
-const init1 = 0xefcdab89
-const init2 = 0x98badcfe
-const init3 = 0x10325476
+const (
+	init0 = 0x67452301
+	init1 = 0xefcdab89
+	init2 = 0x98badcfe
+	init3 = 0x10325476
+)
 
 // Md5ServerUID - Do not start at 0 but next multiple of 8 so as to be able to
 // differentiate with default initialisation value of 0
 const Md5ServerUID = 8
-var uidCounter uint64 = ^uint64(0)
+var uidCounter uint64 = 8 - 1
 
 // NewMd5 - initialize parallel Md5 implementation.
 func NewMd5(md5srv *Md5Server) hash.Hash {
@@ -178,52 +180,7 @@ func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
 	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64 /*n*/)
 
-	getDigest := func(s *digest8, idx int) (out [Size]byte) {
-		binary.LittleEndian.PutUint32(out[0:], s.v0[idx])
-		binary.LittleEndian.PutUint32(out[4:], s.v1[idx])
-		binary.LittleEndian.PutUint32(out[8:], s.v2[idx])
-		binary.LittleEndian.PutUint32(out[12:], s.v3[idx])
-		return
-	}
-
-	if !firstInvocation {
-		fmt.Printf("%x -- expecting 014842d480b571495a4a0363793f7367\n", getDigest(s, 0))
-		fmt.Printf("%x -- expecting 0b649bcb5a82868817fec9a6e709d233\n", getDigest(s, 1))
-	}
-	if firstInvocation {
-		if s.v0[0] != 0x89d4ff56 || s.v1[0] != 0x125cd962 || s.v2[0] != 0x69cade33 || s.v3[0] != 0x0033e325 { // aaaaa
-			panic("Error in lane 0")
-		}
-
-		if s.v0[1] != 0xf230419a || s.v1[1] != 0x5009fe4e || s.v2[1] != 0xbac6852f || s.v3[1] != 0xe631cc2f { // bbbbb
-			panic("Error in lane 1")
-		}
-
-		if s.v0[2] != 0xb6679971 || s.v1[2] != 0x5767705a || s.v2[2] != 0x16296ec1 || s.v3[2] != 0x2556a2f2 { // ccccc
-			panic("Error in lane 2")
-		}
-
-		if s.v0[3] != 0xd2d0e59c || s.v1[3] != 0x6f1aa3d8 || s.v2[3] != 0x8b8bdf88 || s.v3[3] != 0x9f4c6912 { // ddddd
-			panic("Error in lane 3")
-		}
-
-		if s.v0[4] != 0x441e8ef1 || s.v1[4] != 0xafeb8e56 || s.v2[4] != 0x6d00d8ae || s.v3[4] != 0x91921784 { // eeeee
-			panic("Error in lane 4")
-		}
-
-		if s.v0[5] != 0x4a3fdc71 || s.v1[5] != 0x6645d0bb || s.v2[5] != 0x84d4e6a6 || s.v3[5] != 0xd6ea6f44 { // fffff
-			panic("Error in lane 5")
-		}
-
-		if s.v0[6] != 0x698884d3 || s.v1[6] != 0xdc5ba7ad || s.v2[6] != 0xebf7c759 || s.v3[6] != 0x4208b0db { // ggggg
-			panic("Error in lane 6")
-		}
-
-		if s.v0[7] != 0x53a1b03e || s.v1[7] != 0x66d53e23 || s.v2[7] != 0xafdc6126 || s.v3[7] != 0xb39c4fdd { // hhhhh
-			panic("Error in lane 7")
-		}
-		firstInvocation = false
-	}
+	firstInvocation = false
 }
 
 func getDigest(index int, state []byte) (sum [Size]byte) {
@@ -339,14 +296,19 @@ func (md5srv *Md5Server) blocks() {
 	blockMd5(&state, inputs) // , mask)
 
 	md5srv.totalIn = 0
-	for i := 0; i < len( md5srv.lanes); i++ {
+	for i := 0; i < len(md5srv.lanes); i++ {
 		uid, outputCh := md5srv.lanes[i].uid, md5srv.lanes[i].outputCh
-		md5srv.digests[uid] = [Size]byte{} /* outputs[i] */
+		digest := [Size]byte{}
+		binary.LittleEndian.PutUint32(digest[0:], state.v0[i])
+		binary.LittleEndian.PutUint32(digest[4:], state.v1[i])
+		binary.LittleEndian.PutUint32(digest[8:], state.v2[i])
+		binary.LittleEndian.PutUint32(digest[12:], state.v3[i])
+		md5srv.digests[uid] = digest /* outputs[i] */
 		md5srv.lanes[i] = Md5LaneInfo{}
 
 		if outputCh != nil {
 			// Send back result
-			outputCh <- [Size]byte{} /* outputs[i] */
+			outputCh <- digest /* outputs[i] */
 			delete(md5srv.digests, uid) // Delete entry from hashmap
 		}
 	}

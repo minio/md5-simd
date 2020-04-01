@@ -2,51 +2,42 @@ package md5simd
 
 import (
 	"fmt"
+	"hash"
 	"testing"
 )
 
 type md5Test struct {
-	out [16]byte
 	in  string
+	want string
 }
 
 var golden = []md5Test{
-	{ [...]byte{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+	{ "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "014842d480b571495a4a0363793f7367" },
+	{ "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "0b649bcb5a82868817fec9a6e709d233" },
+	{ "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "bcd5708ed79b18f0f0aaa27fd0056d86" },
+	{ "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "e987c862fbd2f2f0ca859cb8d7806bf3" },
+	{ "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "982731671f0cd82cafce8d96a98e7a48" },
+	{ "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "baf13e8b16d8c06324d7c9ab32cb7ff0" },
+	{ "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg", "8ea3109cbd951bba1ace2f401a784ae4" },
+	{ "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh", "d141045bfb385cad357e7c39c60e5da0" },
 }
 
 func TestGolden(t *testing.T) {
 
 	server := NewMd5Server()
-	h512_0 := NewMd5(server)
-	h512_1 := NewMd5(server)
-	h512_2 := NewMd5(server)
-	h512_3 := NewMd5(server)
-	h512_4 := NewMd5(server)
-	h512_5 := NewMd5(server)
-	h512_6 := NewMd5(server)
-	h512_7 := NewMd5(server)
+	h8 := [8]hash.Hash{}
+	for i := range h8 {
+		h8[i] = NewMd5(server)
+	}
 
-	h512_0.Write([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-	h512_1.Write([]byte("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
-	h512_2.Write([]byte("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"))
-	h512_3.Write([]byte("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"))
-	h512_4.Write([]byte("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"))
-	h512_5.Write([]byte("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
-	h512_6.Write([]byte("gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"))
-	h512_7.Write([]byte("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"))
+	for i := range h8 {
+		h8[i].Write([]byte(golden[i].in))
+	}
 
-	digest_0 := h512_0.Sum([]byte{})
-
-	fmt.Println(digest_0)
-
-	//for _, g := range golden {
-	//	h512.Reset()
-	//	// h512.Write([]byte(g.in))
-	//	digest := h512.Sum([]byte(g.in))
-	//	s := fmt.Sprintf("%x", digest)
-	//	fmt.Println("md5 =", s)
-	//	//if !reflect.DeepEqual(digest, g.out[:]) {
-	//	//	t.Fatalf("Sum256 function: sha256(%s) = %s want %s", g.in, s, hex.EncodeToString(g.out[:]))
-	//	//}
-	//}
+	for i := range h8 {
+		digest := h8[i].Sum([]byte{})
+		if fmt.Sprintf("%x", digest) != golden[i].want {
+			t.Errorf("TestGolden[%d], got %v, want %v", i, fmt.Sprintf("%x", digest), golden[i].want)
+		}
+	}
 }
