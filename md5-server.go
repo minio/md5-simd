@@ -40,7 +40,7 @@ const init2 = 0x98badcfe
 const init3 = 0x10325476
 
 // Md5ServerUID - Do not start at 0 but next multiple of 8 so as to be able to
-// differentiate with default initialiation value of 0
+// differentiate with default initialisation value of 0
 const Md5ServerUID = 8
 var uidCounter uint64 = ^uint64(0)
 
@@ -67,7 +67,7 @@ func (d *Md5Digest) Size() int { return Size }
 // BlockSize - Return blocksize of checksum
 func (d Md5Digest) BlockSize() int { return BlockSize }
 
-// Reset - reset sha digest to its initial values
+// Reset - reset digest to its initial values
 func (d *Md5Digest) Reset() {
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, reset: true}
 	d.nx = 0
@@ -104,7 +104,7 @@ func (d *Md5Digest) Write(p []byte) (nn int, err error) {
 	return
 }
 
-// Sum - Return sha256 sum in bytes
+// Sum - Return MD5 sum in bytes
 func (d *Md5Digest) Sum(in []byte) (result []byte) {
 
 	if d.final {
@@ -248,7 +248,7 @@ type blockInput struct {
 type Md5Server struct {
 	blocksCh chan blockInput       // Input channel
 	totalIn  int                   // Total number of inputs waiting to be processed
-	lanes    [8]Md5LaneInfo    // Array with info per lane (out of 8)
+	lanes    [8]Md5LaneInfo        // Array with info per lane (out of 8)
 	digests  map[uint64][Size]byte // Map of uids to (interim) digest results
 }
 
@@ -371,7 +371,7 @@ func (md5srv *Md5Server) getDigests() (s digest8) {
 			s.v0[i] = binary.LittleEndian.Uint32(a[0:4])
 			s.v1[i] = binary.LittleEndian.Uint32(a[4:8])
 			s.v2[i] = binary.LittleEndian.Uint32(a[8:12])
-			s.v2[i] = binary.LittleEndian.Uint32(a[12:16])
+			s.v3[i] = binary.LittleEndian.Uint32(a[12:16])
 		} else {
 			s.v0[i] = init0
 			s.v1[i] = init1
