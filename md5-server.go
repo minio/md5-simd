@@ -27,7 +27,6 @@ import (
 	"time"
 	"unsafe"
 	"fmt"
-	"bytes"
 )
 
 const BlockSize = 64
@@ -43,7 +42,7 @@ const init3 = 0x10325476
 // Md5ServerUID - Do not start at 0 but next multiple of 8 so as to be able to
 // differentiate with default initialiation value of 0
 const Md5ServerUID = 8
-var uidCounter uint64
+var uidCounter uint64 = ^uint64(0)
 
 // NewMd5 - initialize parallel Md5 implementation.
 func NewMd5(md5srv *Md5Server) hash.Hash {
@@ -140,61 +139,67 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 	return append(in, d.result[:]...)
 }
 
+var firstInvocation = true
+
 // Interface function to assembly code
 func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
 	bufs := [8]int32{4, 64+4, 2*64+4, 3*64+4, 4*64+4, 5*64+4, 6*64+4, 7*64+4}
 
-	base := bytes.Repeat([]byte("*"), 4)
-	base = append(base, bytes.Repeat([]byte("a"), 64)...)
-	base = append(base, bytes.Repeat([]byte("b"), 64)...)
-	base = append(base, bytes.Repeat([]byte("c"), 64)...)
-	base = append(base, bytes.Repeat([]byte("d"), 64)...)
-	base = append(base, bytes.Repeat([]byte("e"), 64)...)
-	base = append(base, bytes.Repeat([]byte("f"), 64)...)
-	base = append(base, bytes.Repeat([]byte("g"), 64)...)
-	base = append(base, bytes.Repeat([]byte("h"), 64)...)
+	base := make([]byte, 4+8*64)
+	copy(base, []byte("****"))
+	copy(base[4:], input[0])
+	copy(base[4+1*64:], input[1])
+	copy(base[4+2*64:], input[2])
+	copy(base[4+3*64:], input[3])
+	copy(base[4+4*64:], input[4])
+	copy(base[4+5*64:], input[5])
+	copy(base[4+6*64:], input[6])
+	copy(base[4+7*64:], input[7])
 
 	var cache cache8 // stack storage for block8 tmp state
 
 	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64 /*n*/)
 
-	if s.v0[0] != 0x89d4ff56 || s.v1[0] != 0x125cd962 || s.v2[0] != 0x69cade33 || s.v3[0] != 0x0033e325 { // aaaaa
-		panic("Error in lane 0")
-	}
-
-	if s.v0[1] != 0xf230419a || s.v1[1] != 0x5009fe4e || s.v2[1] != 0xbac6852f || s.v3[1] != 0xe631cc2f { // bbbbb
-		panic("Error in lane 1")
-	}
-
-	if s.v0[2] != 0xb6679971 || s.v1[2] != 0x5767705a || s.v2[2] != 0x16296ec1 || s.v3[2] != 0x2556a2f2 { // ccccc
-		panic("Error in lane 2")
-	}
-
-	if s.v0[3] != 0xd2d0e59c || s.v1[3] != 0x6f1aa3d8 || s.v2[3] != 0x8b8bdf88 || s.v3[3] != 0x9f4c6912 { // ddddd
-		panic("Error in lane 3")
-	}
-
-	if s.v0[4] != 0x441e8ef1 || s.v1[4] != 0xafeb8e56 || s.v2[4] != 0x6d00d8ae || s.v3[4] != 0x91921784 { // eeeee
-		panic("Error in lane 4")
-	}
-
-	if s.v0[5] != 0x4a3fdc71 || s.v1[5] != 0x6645d0bb || s.v2[5] != 0x84d4e6a6 || s.v3[5] != 0xd6ea6f44 { // fffff
-		panic("Error in lane 5")
-	}
-
-	if s.v0[6] != 0x698884d3 || s.v1[6] != 0xdc5ba7ad || s.v2[6] != 0xebf7c759 || s.v3[6] != 0x4208b0db { // ggggg
-		panic("Error in lane 6")
-	}
-
-	if s.v0[7] != 0x53a1b03e || s.v1[7] != 0x66d53e23 || s.v2[7] != 0xafdc6126 || s.v3[7] != 0xb39c4fdd { // hhhhh
-		panic("Error in lane 7")
-	}
-
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v0[0], s.v0[1], s.v0[2], s.v0[3], s.v0[4], s.v0[5], s.v0[6], s.v0[7])
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v1[0], s.v1[1], s.v1[2], s.v1[3], s.v1[4], s.v1[5], s.v1[6], s.v1[7])
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v2[0], s.v2[1], s.v2[2], s.v2[3], s.v2[4], s.v2[5], s.v2[6], s.v2[7])
 	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v3[0], s.v3[1], s.v3[2], s.v3[3], s.v3[4], s.v3[5], s.v3[6], s.v3[7])
+
+	if firstInvocation {
+		if s.v0[0] != 0x89d4ff56 || s.v1[0] != 0x125cd962 || s.v2[0] != 0x69cade33 || s.v3[0] != 0x0033e325 { // aaaaa
+			panic("Error in lane 0")
+		}
+
+		if s.v0[1] != 0xf230419a || s.v1[1] != 0x5009fe4e || s.v2[1] != 0xbac6852f || s.v3[1] != 0xe631cc2f { // bbbbb
+			panic("Error in lane 1")
+		}
+
+		if s.v0[2] != 0xb6679971 || s.v1[2] != 0x5767705a || s.v2[2] != 0x16296ec1 || s.v3[2] != 0x2556a2f2 { // ccccc
+			panic("Error in lane 2")
+		}
+
+		if s.v0[3] != 0xd2d0e59c || s.v1[3] != 0x6f1aa3d8 || s.v2[3] != 0x8b8bdf88 || s.v3[3] != 0x9f4c6912 { // ddddd
+			panic("Error in lane 3")
+		}
+
+		if s.v0[4] != 0x441e8ef1 || s.v1[4] != 0xafeb8e56 || s.v2[4] != 0x6d00d8ae || s.v3[4] != 0x91921784 { // eeeee
+			panic("Error in lane 4")
+		}
+
+		if s.v0[5] != 0x4a3fdc71 || s.v1[5] != 0x6645d0bb || s.v2[5] != 0x84d4e6a6 || s.v3[5] != 0xd6ea6f44 { // fffff
+			panic("Error in lane 5")
+		}
+
+		if s.v0[6] != 0x698884d3 || s.v1[6] != 0xdc5ba7ad || s.v2[6] != 0xebf7c759 || s.v3[6] != 0x4208b0db { // ggggg
+			panic("Error in lane 6")
+		}
+
+		if s.v0[7] != 0x53a1b03e || s.v1[7] != 0x66d53e23 || s.v2[7] != 0xafdc6126 || s.v3[7] != 0xb39c4fdd { // hhhhh
+			panic("Error in lane 7")
+		}
+		firstInvocation = false
+	}
 }
 
 func getDigest(index int, state []byte) (sum [Size]byte) {
@@ -250,7 +255,7 @@ func (md5srv *Md5Server) Process() {
 				md5srv.reset(block.uid)
 				continue
 			}
-			index := block.uid & 0xf
+			index := block.uid % uint64(len(md5srv.lanes))
 			// fmt.Println("Adding message:", block.uid, index)
 
 			if md5srv.lanes[index].block != nil { // If slot is already filled, process all inputs
