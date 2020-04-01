@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"hash"
 	"testing"
+	"bytes"
+	"crypto/md5"
 )
 
 type md5Test struct {
@@ -38,6 +40,32 @@ func TestGolden(t *testing.T) {
 		digest := h8[i].Sum([]byte{})
 		if fmt.Sprintf("%x", digest) != golden[i].want {
 			t.Errorf("TestGolden[%d], got %v, want %v", i, fmt.Sprintf("%x", digest), golden[i].want)
+		}
+	}
+}
+
+func TestGolden1Mb(t *testing.T) {
+
+	server := NewMd5Server()
+	h8 := [8]hash.Hash{}
+	for i := range h8 {
+		h8[i] = NewMd5(server)
+	}
+
+	for i := range h8 {
+		h8[i].Write(bytes.Repeat([]byte{0x61 + byte(i)}, 1024*1024))
+	}
+
+	for i := range h8 {
+		digest := h8[i].Sum([]byte{})
+		got := fmt.Sprintf("%x\n", digest)
+
+		h := md5.New()
+		h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, 1024*1024))
+		want := fmt.Sprintf("%x\n", h.Sum(nil))
+
+		if got != want {
+			t.Errorf("TestGolden1Mb[%d], got %v, want %v", i, got, want)
 		}
 	}
 }

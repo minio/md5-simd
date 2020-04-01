@@ -129,9 +129,7 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 
 	// Length in bits.
 	len <<= 3
-	for i := uint(0); i < 8; i++ {
-		tmp[i] = byte(len >> (56 - 8*i))
-	}
+	binary.LittleEndian.PutUint64(tmp[:], len) // append length in bits
 	trail = append(trail, tmp[0:8]...)
 
 	sumCh := make(chan [Size]byte)
@@ -148,9 +146,22 @@ func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
 	bufs := [8]int32{4, 64+4, 2*64+4, 3*64+4, 4*64+4, 5*64+4, 6*64+4, 7*64+4}
 
-	base := make([]byte, 4+8*64)
+	n := int32(64)
+	base := make([]byte, 4+8*n)
 	copy(base, []byte("****"))
 	if firstInvocation {
+		n = int32(len(input[0]))
+		base = make([]byte, 4+8*n)
+		copy(base[4:], input[0])
+		copy(base[4+1*n:], input[1])
+		copy(base[4+2*n:], input[2])
+		copy(base[4+3*n:], input[3])
+		copy(base[4+4*n:], input[4])
+		copy(base[4+5*n:], input[5])
+		copy(base[4+6*n:], input[6])
+		copy(base[4+7*n:], input[7])
+		bufs = [8]int32{4, n+4, 2*n+4, 3*n+4, 4*n+4, 5*n+4, 6*n+4, 7*n+4}
+	} else {
 		copy(base[4:], input[0])
 		copy(base[4+1*64:], input[1])
 		copy(base[4+2*64:], input[2])
@@ -159,26 +170,11 @@ func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 		copy(base[4+5*64:], input[5])
 		copy(base[4+6*64:], input[6])
 		copy(base[4+7*64:], input[7])
-	} else {
-		l := uint64(64)
-		tmp := [1 + 63 + 8]byte{0x80}
-		pad := (55 - l) % 64                             // calculate number of padding bytes
-		binary.LittleEndian.PutUint64(tmp[1+pad:], l<<3) // append length in bits
-		tmpslc := tmp[:1+pad+8]
-
-		copy(base[4:], tmpslc)
-		copy(base[4+1*64:], tmpslc)
-		copy(base[4+2*64:], tmpslc)
-		copy(base[4+3*64:], tmpslc)
-		copy(base[4+4*64:], tmpslc)
-		copy(base[4+5*64:], tmpslc)
-		copy(base[4+6*64:], tmpslc)
-		copy(base[4+7*64:], tmpslc)
 	}
 
 	var cache cache8 // stack storage for block8 tmp state
 
-	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64 /*n*/)
+	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(n))
 
 	firstInvocation = false
 }
