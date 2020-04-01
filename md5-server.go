@@ -148,24 +148,48 @@ func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
 	base := make([]byte, 4+8*64)
 	copy(base, []byte("****"))
-	copy(base[4:], input[0])
-	copy(base[4+1*64:], input[1])
-	copy(base[4+2*64:], input[2])
-	copy(base[4+3*64:], input[3])
-	copy(base[4+4*64:], input[4])
-	copy(base[4+5*64:], input[5])
-	copy(base[4+6*64:], input[6])
-	copy(base[4+7*64:], input[7])
+	if firstInvocation {
+		copy(base[4:], input[0])
+		copy(base[4+1*64:], input[1])
+		copy(base[4+2*64:], input[2])
+		copy(base[4+3*64:], input[3])
+		copy(base[4+4*64:], input[4])
+		copy(base[4+5*64:], input[5])
+		copy(base[4+6*64:], input[6])
+		copy(base[4+7*64:], input[7])
+	} else {
+		l := uint64(64)
+		tmp := [1 + 63 + 8]byte{0x80}
+		pad := (55 - l) % 64                             // calculate number of padding bytes
+		binary.LittleEndian.PutUint64(tmp[1+pad:], l<<3) // append length in bits
+		tmpslc := tmp[:1+pad+8]
+
+		copy(base[4:], tmpslc)
+		copy(base[4+1*64:], tmpslc)
+		copy(base[4+2*64:], tmpslc)
+		copy(base[4+3*64:], tmpslc)
+		copy(base[4+4*64:], tmpslc)
+		copy(base[4+5*64:], tmpslc)
+		copy(base[4+6*64:], tmpslc)
+		copy(base[4+7*64:], tmpslc)
+	}
 
 	var cache cache8 // stack storage for block8 tmp state
 
 	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64 /*n*/)
 
-	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v0[0], s.v0[1], s.v0[2], s.v0[3], s.v0[4], s.v0[5], s.v0[6], s.v0[7])
-	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v1[0], s.v1[1], s.v1[2], s.v1[3], s.v1[4], s.v1[5], s.v1[6], s.v1[7])
-	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v2[0], s.v2[1], s.v2[2], s.v2[3], s.v2[4], s.v2[5], s.v2[6], s.v2[7])
-	fmt.Printf("%08x-%08x-%08x-%08x-%08x-%08x-%08x-%08x\n", s.v3[0], s.v3[1], s.v3[2], s.v3[3], s.v3[4], s.v3[5], s.v3[6], s.v3[7])
+	getDigest := func(s *digest8, idx int) (out [Size]byte) {
+		binary.LittleEndian.PutUint32(out[0:], s.v0[idx])
+		binary.LittleEndian.PutUint32(out[4:], s.v1[idx])
+		binary.LittleEndian.PutUint32(out[8:], s.v2[idx])
+		binary.LittleEndian.PutUint32(out[12:], s.v3[idx])
+		return
+	}
 
+	if !firstInvocation {
+		fmt.Printf("%x -- expecting 014842d480b571495a4a0363793f7367\n", getDigest(s, 0))
+		fmt.Printf("%x -- expecting 0b649bcb5a82868817fec9a6e709d233\n", getDigest(s, 1))
+	}
 	if firstInvocation {
 		if s.v0[0] != 0x89d4ff56 || s.v1[0] != 0x125cd962 || s.v2[0] != 0x69cade33 || s.v3[0] != 0x0033e325 { // aaaaa
 			panic("Error in lane 0")
