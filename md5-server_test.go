@@ -69,3 +69,22 @@ func TestGolden1Mb(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkGolden(b *testing.B) {
+
+	server := NewMd5Server()
+	h8 := [8]hash.Hash{}
+	for i := range h8 {
+		h8[i] = NewMd5(server)
+	}
+
+	b.SetBytes(1024*1024*8)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		for i := range h8 {
+			h8[i].Write(bytes.Repeat([]byte{0x61 + byte(i)}, 1024*1024))
+		}
+	}
+}
