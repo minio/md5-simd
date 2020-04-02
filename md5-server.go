@@ -79,6 +79,23 @@ func (d *Md5Digest) Reset() {
 
 // Write to digest
 func (d *Md5Digest) Write(p []byte) (nn int, err error) {
+	// break input into chunks of maximum MaxBlockSize size
+	for len(p) > 0 {
+		l := len(p)
+		if l > MaxBlockSize {
+			l = MaxBlockSize
+		}
+		nnn, err := d.write(p[:l])
+		if err != nil {
+			return nn, err
+		}
+		nn += nnn
+		p = p[l:]
+	}
+	return
+}
+
+func (d *Md5Digest) write(p []byte) (nn int, err error) {
 
 	if d.final {
 		return 0, errors.New("Md5Digest already finalized. Reset first before writing again")

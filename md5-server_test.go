@@ -44,16 +44,18 @@ func TestGolden(t *testing.T) {
 	}
 }
 
-func TestGolden1Mb(t *testing.T) {
+func testGolden(t *testing.T, megabyte int) {
 
 	server := NewMd5Server()
 	h8 := [8]hash.Hash{}
+	input := [8][]byte{}
 	for i := range h8 {
 		h8[i] = NewMd5(server)
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, megabyte*1024*1024)
 	}
 
 	for i := range h8 {
-		h8[i].Write(bytes.Repeat([]byte{0x61 + byte(i)}, 1024*1024))
+		h8[i].Write(input[i])
 	}
 
 	for i := range h8 {
@@ -61,13 +63,22 @@ func TestGolden1Mb(t *testing.T) {
 		got := fmt.Sprintf("%x\n", digest)
 
 		h := md5.New()
-		h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, 1024*1024))
+		h.Write(input[i])
 		want := fmt.Sprintf("%x\n", h.Sum(nil))
 
 		if got != want {
-			t.Errorf("TestGolden1Mb[%d], got %v, want %v", i, got, want)
+			t.Errorf("TestGolden[%d], got %v, want %v", i, got, want)
 		}
 	}
+}
+
+func TestGolden(t *testing.T) {
+	t.Run("1MB", func(t *testing.T) {
+		testGolden(t, 1)
+	})
+	t.Run("2MB", func(t *testing.T) {
+		testGolden(t, 2)
+	})
 }
 
 func benchmarkGolden(b *testing.B, blockSize int) {
