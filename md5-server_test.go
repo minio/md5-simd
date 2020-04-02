@@ -70,7 +70,7 @@ func TestGolden1Mb(t *testing.T) {
 	}
 }
 
-func BenchmarkGolden(b *testing.B) {
+func benchmarkGolden(b *testing.B, blockSize int) {
 
 	server := NewMd5Server()
 	h8 := [8]hash.Hash{}

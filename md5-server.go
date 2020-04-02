@@ -26,7 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
-	"fmt"
 )
 
 const BlockSize = 64
@@ -144,33 +143,29 @@ var firstInvocation = true
 // Interface function to assembly code
 func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 
-	bufs := [8]int32{4, 64+4, 2*64+4, 3*64+4, 4*64+4, 5*64+4, 6*64+4, 7*64+4}
-
-	n := int32(64)
-	base := make([]byte, 4+8*n)
-	copy(base, []byte("****"))
-	if firstInvocation {
-		n = int32(len(input[0]))
-		base = make([]byte, 4+8*n)
-		copy(base[4:], input[0])
-		copy(base[4+1*n:], input[1])
-		copy(base[4+2*n:], input[2])
-		copy(base[4+3*n:], input[3])
-		copy(base[4+4*n:], input[4])
-		copy(base[4+5*n:], input[5])
-		copy(base[4+6*n:], input[6])
-		copy(base[4+7*n:], input[7])
-		bufs = [8]int32{4, n+4, 2*n+4, 3*n+4, 4*n+4, 5*n+4, 6*n+4, 7*n+4}
-	} else {
-		copy(base[4:], input[0])
-		copy(base[4+1*64:], input[1])
-		copy(base[4+2*64:], input[2])
-		copy(base[4+3*64:], input[3])
-		copy(base[4+4*64:], input[4])
-		copy(base[4+5*64:], input[5])
-		copy(base[4+6*64:], input[6])
-		copy(base[4+7*64:], input[7])
+	n := int32(len(input[0]))
+	for i := 1; i < len(input); i++ {
+		if n < int32(len(input[i])) {
+			n = int32(len(input[i]))
+		}
 	}
+
+	const MaxBlockSize = 1024*1024
+
+	if n > MaxBlockSize {
+		panic("Maximum input length should never exceed MaxBlockSize")
+	}
+
+	bufs := [8]int32{4, 4+MaxBlockSize, 4+MaxBlockSize*2, 4+MaxBlockSize*3, 4+MaxBlockSize*4, 4+MaxBlockSize*5, 4+MaxBlockSize*6, 4+MaxBlockSize*7}
+	base := make([]byte, 4+8*MaxBlockSize)
+	copy(base[bufs[0]:], input[0])
+	copy(base[bufs[1]:], input[1])
+	copy(base[bufs[2]:], input[2])
+	copy(base[bufs[3]:], input[3])
+	copy(base[bufs[4]:], input[4])
+	copy(base[bufs[5]:], input[5])
+	copy(base[bufs[6]:], input[6])
+	copy(base[bufs[7]:], input[7])
 
 	var cache cache8 // stack storage for block8 tmp state
 
