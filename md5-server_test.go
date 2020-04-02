@@ -74,8 +74,10 @@ func benchmarkGolden(b *testing.B, blockSize int) {
 
 	server := NewMd5Server()
 	h8 := [8]hash.Hash{}
+	input := [8][]byte{}
 	for i := range h8 {
 		h8[i] = NewMd5(server)
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
 	}
 
 	b.SetBytes(int64(blockSize*8))
@@ -84,7 +86,7 @@ func benchmarkGolden(b *testing.B, blockSize int) {
 
 	for j := 0; j < b.N; j++ {
 		for i := range h8 {
-			h8[i].Write(bytes.Repeat([]byte{0x61 + byte(i)}, blockSize))
+			h8[i].Write(input[i])
 		}
 	}
 }
@@ -110,8 +112,5 @@ func BenchmarkGolden(b *testing.B) {
 	})
 	b.Run("2MB", func(b *testing.B) {
 		benchmarkGolden(b, 2*1024*1024)
-	})
-	b.Run("5MB", func(b *testing.B) {
-		benchmarkGolden(b, 5*1024*1024)
 	})
 }

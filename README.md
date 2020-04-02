@@ -10,14 +10,13 @@ This package is based upon the [md5vec](https://github.com/igneous-systems/md5ve
 Single core performance (aggregated) for different block sizes:
 
 ```
-BenchmarkGolden/32KB-8             26373             44667 ns/op        5868.83 MB/s      264413 B/op         33 allocs/op
-BenchmarkGolden/64KB-8             15537             77450 ns/op        6769.42 MB/s      526638 B/op         34 allocs/op
-BenchmarkGolden/128KB-8             7994            146630 ns/op        7151.19 MB/s     1051115 B/op         37 allocs/op
-BenchmarkGolden/256KB-8             3684            279915 ns/op        7492.10 MB/s     2100121 B/op         43 allocs/op
-BenchmarkGolden/512KB-8             1816            616046 ns/op        6808.42 MB/s     4198477 B/op         60 allocs/op
-BenchmarkGolden/1MB-8                837           1356011 ns/op        6186.24 MB/s     8395747 B/op        103 allocs/op
-BenchmarkGolden/2MB-8                450           2530872 ns/op        6629.03 MB/s    16789713 B/op        180 allocs/op
-BenchmarkGolden/5MB-8                170           6599136 ns/op        6355.84 MB/s    41974274 B/op        449 allocs/op
+BenchmarkGolden/32KB-8             14199             85032 ns/op        3082.88 MB/s        1712 B/op         24 allocs/op
+BenchmarkGolden/64KB-8              7680            156312 ns/op        3354.11 MB/s        1838 B/op         26 allocs/op
+BenchmarkGolden/128KB-8             3788            303343 ns/op        3456.74 MB/s        2148 B/op         30 allocs/op
+BenchmarkGolden/256KB-8             1954            612922 ns/op        3421.57 MB/s        2921 B/op         42 allocs/op
+BenchmarkGolden/512KB-8              860           1383787 ns/op        3031.03 MB/s        5092 B/op         73 allocs/op
+BenchmarkGolden/1MB-8                408           2904512 ns/op        2888.13 MB/s       10242 B/op        147 allocs/op
+BenchmarkGolden/2MB-8                202           5908945 ns/op        2839.29 MB/s       22042 B/op        317 allocs/op
 ```
 
 ### TODO

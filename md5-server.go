@@ -31,6 +31,7 @@ import (
 const BlockSize = 64
 const Size = 16
 const chunk = BlockSize
+const MaxBlockSize = 1024*1024*2
 
 // MD5 initialization constants
 const (
@@ -138,10 +139,9 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 	return append(in, d.result[:]...)
 }
 
-var firstInvocation = true
 
 // Interface function to assembly code
-func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
+func blockMd5(s *digest8, input [8][]byte, base []byte) {
 
 	n := int32(len(input[0]))
 	for i := 1; i < len(input); i++ {
@@ -150,14 +150,11 @@ func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 		}
 	}
 
-	const MaxBlockSize = 1024*1024
-
 	if n > MaxBlockSize {
 		panic("Maximum input length should never exceed MaxBlockSize")
 	}
 
 	bufs := [8]int32{4, 4+MaxBlockSize, 4+MaxBlockSize*2, 4+MaxBlockSize*3, 4+MaxBlockSize*4, 4+MaxBlockSize*5, 4+MaxBlockSize*6, 4+MaxBlockSize*7}
-	base := make([]byte, 4+8*MaxBlockSize)
 	copy(base[bufs[0]:], input[0])
 	copy(base[bufs[1]:], input[1])
 	copy(base[bufs[2]:], input[2])
@@ -170,8 +167,6 @@ func blockMd5(s *digest8, input [8][]byte/*, mask []uint64*/) {
 	var cache cache8 // stack storage for block8 tmp state
 
 	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(n))
-
-	firstInvocation = false
 }
 
 func getDigest(index int, state []byte) (sum [Size]byte) {
@@ -198,6 +193,7 @@ type Md5Server struct {
 	totalIn  int                   // Total number of inputs waiting to be processed
 	lanes    [8]Md5LaneInfo        // Array with info per lane (out of 8)
 	digests  map[uint64][Size]byte // Map of uids to (interim) digest results
+	base     []byte				   // Buffer for merging different streams into
 }
 
 // Md5LaneInfo - Info for each lane
@@ -212,6 +208,7 @@ func NewMd5Server() *Md5Server {
 	md5srv := &Md5Server{}
 	md5srv.digests = make(map[uint64][Size]byte)
 	md5srv.blocksCh = make(chan blockInput)
+	md5srv.base = make([]byte, 4+8*MaxBlockSize)
 
 	// Start a single thread for reading from the input channel
 	go md5srv.Process()
@@ -282,9 +279,8 @@ func (md5srv *Md5Server) blocks() {
 		inputs[i] = md5srv.lanes[i].block
 	}
 
-//	mask := expandMask(genMask(md5srv))
 	state := md5srv.getDigests()
-	blockMd5(&state, inputs) // , mask)
+	blockMd5(&state, inputs, md5srv.base)
 
 	md5srv.totalIn = 0
 	for i := 0; i < len(md5srv.lanes); i++ {
@@ -294,12 +290,12 @@ func (md5srv *Md5Server) blocks() {
 		binary.LittleEndian.PutUint32(digest[4:], state.v1[i])
 		binary.LittleEndian.PutUint32(digest[8:], state.v2[i])
 		binary.LittleEndian.PutUint32(digest[12:], state.v3[i])
-		md5srv.digests[uid] = digest /* outputs[i] */
+		md5srv.digests[uid] = digest
 		md5srv.lanes[i] = Md5LaneInfo{}
 
 		if outputCh != nil {
 			// Send back result
-			outputCh <- digest /* outputs[i] */
+			outputCh <- digest
 			delete(md5srv.digests, uid) // Delete entry from hashmap
 		}
 	}
