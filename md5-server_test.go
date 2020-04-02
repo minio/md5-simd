@@ -78,13 +78,40 @@ func BenchmarkGolden(b *testing.B) {
 		h8[i] = NewMd5(server)
 	}
 
-	b.SetBytes(1024*1024*8)
+	b.SetBytes(int64(blockSize*8))
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for j := 0; j < b.N; j++ {
 		for i := range h8 {
-			h8[i].Write(bytes.Repeat([]byte{0x61 + byte(i)}, 1024*1024))
+			h8[i].Write(bytes.Repeat([]byte{0x61 + byte(i)}, blockSize))
 		}
 	}
+}
+
+func BenchmarkGolden(b *testing.B) {
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkGolden(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkGolden(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkGolden(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkGolden(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkGolden(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkGolden(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkGolden(b, 2*1024*1024)
+	})
+	b.Run("5MB", func(b *testing.B) {
+		benchmarkGolden(b, 5*1024*1024)
+	})
 }
