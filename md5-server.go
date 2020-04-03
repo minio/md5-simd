@@ -366,7 +366,7 @@ type maskRounds struct {
 	rounds uint64
 }
 
-func genMask(input [8][]byte) [8]maskRounds {
+func generateMaskAndRounds(input [8][]byte) [8]maskRounds {
 
 	// Sort on blocks length small to large
 	var sorted [8]lane
@@ -375,7 +375,7 @@ func genMask(input [8][]byte) [8]maskRounds {
 	}
 	sort.Sort(lanes(sorted[:]))
 
-	// Create mask array including 'rounds' between masks
+	// Create mask array including 'rounds' (of processing 64 blocks of 64 bytes) between masks
 	m, round, index := uint64(0xff), uint64(0), 0
 	var mr [8]maskRounds
 	for _, s := range sorted {
