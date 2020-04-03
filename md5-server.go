@@ -394,19 +394,3 @@ func generateMaskAndRounds(input [8][]byte) [8]maskRounds {
 
 	return mr
 }
-
-// TODO: remove function
-func expandMask(mr [8]maskRounds) []uint64 {
-	size := uint64(0)
-	for _, r := range mr {
-		size += r.rounds
-	}
-	result, index := make([]uint64, size), 0
-	for _, r := range mr {
-		for j := uint64(0); j < r.rounds; j++ {
-			result[index] = r.mask
-			index++
-		}
-	}
-	return result
-}
