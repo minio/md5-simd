@@ -181,18 +181,21 @@ func blockMd5(s *digest8, input [8][]byte, base []byte) {
 	copy(base[bufs[6]:], input[6])
 	copy(base[bufs[7]:], input[7])
 
-	var cache cache8 // stack storage for block8 tmp state
+	sdup := *s // create copy of initial states to receive intermediate updates
 
-	block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(n))
-}
+	maskRounds := generateMaskAndRounds(input)
 
-func getDigest(index int, state []byte) (sum [Size]byte) {
-	//for j := 0; j < 8; j += 2 {
-	//	for i := index*4 + j*Size; i < index*4+(j+1)*Size; i += Size {
-	//		binary.BigEndian.PutUint32(sum[j*2:], binary.LittleEndian.Uint32(state[i:i+4]))
-	//	}
-	//}
-	return
+	for _, m := range maskRounds {
+		var cache cache8 // stack storage for block8 tmp state
+		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
+
+		for j := 0; j < len(bufs); j++ {
+			bufs[j] += int32(64*m.rounds) // update pointers for next round
+			if m.mask & (1 << j) != 0 {	  // update digest if still masked as active
+				(*s).v0[j], (*s).v1[j], (*s).v2[j], (*s).v3[j] = sdup.v0[j], sdup.v1[j], sdup.v2[j], sdup.v3[j]
+			}
+		}
+	}
 }
 
 // Message to send across input channel

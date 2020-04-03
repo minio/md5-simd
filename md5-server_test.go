@@ -5,7 +5,9 @@ import (
 	"hash"
 	"testing"
 	"bytes"
+	"reflect"
 	"crypto/md5"
+	"encoding/binary"
 )
 
 type md5Test struct {
@@ -163,6 +165,54 @@ func TestGenerateMaskAndRounds(t *testing.T) {
 
 		if !reflect.DeepEqual(mr, g.out) {
 			t.Fatalf("case %d: got %04x\n                    want %04x", gcase, mr, g.out)
+		}
+	}
+}
+
+func TestBlocks(t *testing.T) {
+
+	inputs := [8][]byte{}
+	want := [8]string{}
+	for i := range inputs {
+		inputs[i] = bytes.Repeat([]byte{0x61 + byte(i)}, (i+1)*64)
+
+		{
+			var d digest
+			d.s[0], d.s[1], d.s[2], d.s[3] = init0, init1, init2, init3
+
+			blockGeneric(&d, inputs[i])
+
+			var digest [Size]byte
+			binary.LittleEndian.PutUint32(digest[0:], d.s[0])
+			binary.LittleEndian.PutUint32(digest[4:], d.s[1])
+			binary.LittleEndian.PutUint32(digest[8:], d.s[2])
+			binary.LittleEndian.PutUint32(digest[12:], d.s[3])
+
+			want[i] = fmt.Sprintf("%x", digest)
+			//fmt.Println(want[i])
+		}
+	}
+
+	var s digest8
+
+	for i := 0; i < 8; i++ {
+		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
+	}
+
+	base := make([]byte, 4+8*MaxBlockSize)
+
+	blockMd5(&s, inputs,base)
+
+	for i := 0; i < 8; i++ {
+		var digest [Size]byte
+		binary.LittleEndian.PutUint32(digest[0:], s.v0[i])
+		binary.LittleEndian.PutUint32(digest[4:], s.v1[i])
+		binary.LittleEndian.PutUint32(digest[8:], s.v2[i])
+		binary.LittleEndian.PutUint32(digest[12:], s.v3[i])
+
+		got := fmt.Sprintf("%x", digest)
+		if got != want[i] {
+			t.Errorf("TestBlocks[%d], got %v, want %v", i, got, want[i])
 		}
 	}
 }
