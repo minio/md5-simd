@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+	"fmt"
 )
 
 const BlockSize = 64
@@ -160,26 +161,19 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 // Interface function to assembly code
 func blockMd5(s *digest8, input [8][]byte, base []byte) {
 
-	n := int32(len(input[0]))
-	for i := 1; i < len(input); i++ {
-		if n < int32(len(input[i])) {
-			n = int32(len(input[i]))
+	// Sanity check to make sure we're not passing in more data than MaxBlockSize
+	{
+		for i := 1; i < len(input); i++ {
+			if len(input[i])> MaxBlockSize {
+				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed MaxBlockSize", i))
+			}
 		}
 	}
 
-	if n > MaxBlockSize {
-		panic("Maximum input length should never exceed MaxBlockSize")
-	}
-
 	bufs := [8]int32{4, 4+MaxBlockSize, 4+MaxBlockSize*2, 4+MaxBlockSize*3, 4+MaxBlockSize*4, 4+MaxBlockSize*5, 4+MaxBlockSize*6, 4+MaxBlockSize*7}
-	copy(base[bufs[0]:], input[0])
-	copy(base[bufs[1]:], input[1])
-	copy(base[bufs[2]:], input[2])
-	copy(base[bufs[3]:], input[3])
-	copy(base[bufs[4]:], input[4])
-	copy(base[bufs[5]:], input[5])
-	copy(base[bufs[6]:], input[6])
-	copy(base[bufs[7]:], input[7])
+	for i := 0; i < len(input); i++ {
+		copy(base[bufs[i]:], input[i])
+	}
 
 	sdup := *s // create copy of initial states to receive intermediate updates
 
@@ -369,7 +363,7 @@ type maskRounds struct {
 	rounds uint64
 }
 
-func generateMaskAndRounds(input [8][]byte) [8]maskRounds {
+func generateMaskAndRounds(input [8][]byte) (mr []maskRounds) {
 
 	// Sort on blocks length small to large
 	var sorted [8]lane
@@ -378,19 +372,18 @@ func generateMaskAndRounds(input [8][]byte) [8]maskRounds {
 	}
 	sort.Sort(lanes(sorted[:]))
 
-	// Create mask array including 'rounds' (of processing 64 blocks of 64 bytes) between masks
-	m, round, index := uint64(0xff), uint64(0), 0
-	var mr [8]maskRounds
+	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
+	m, round := uint64(0xff), uint64(0)
+	mr = make([]maskRounds, 0, 8)
 	for _, s := range sorted {
 		if s.len > 0 {
 			if uint64(s.len)>>6 > round {
-				mr[index] = maskRounds{m, (uint64(s.len) >> 6) - round}
-				index++
+				mr = append(mr, maskRounds{m, (uint64(s.len) >> 6) - round})
 			}
 			round = uint64(s.len) >> 6
 		}
 		m = m & ^(1 << uint(s.pos))
 	}
 
-	return mr
+	return
 }

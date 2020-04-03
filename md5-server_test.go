@@ -3,10 +3,12 @@ package md5simd
 import (
 	"fmt"
 	"hash"
+	"time"
 	"testing"
 	"bytes"
 	"reflect"
 	"crypto/md5"
+	"math/rand"
 	"encoding/binary"
 )
 
@@ -130,27 +132,27 @@ func BenchmarkGolden(b *testing.B) {
 
 type maskTest struct {
 	in  [8]int
-	out [8]maskRounds
+	out []maskRounds
 }
 
 var goldenMask = []maskTest{
-	{[8]int{0, 0, 0, 0, 0, 0, 0, 0}, [8]maskRounds{}},
-	{[8]int{64, 0, 64, 0, 64, 0, 64, 0}, [8]maskRounds{{0x55, 1}}},
-	{[8]int{0, 64, 0, 64, 0, 64, 0, 64}, [8]maskRounds{{0xaa, 1}}},
-	{[8]int{64, 64, 64, 64, 64, 64, 64, 64}, [8]maskRounds{{0xff, 1}}},
-	{[8]int{128, 128, 128, 128, 128, 128, 128, 128}, [8]maskRounds{{0xff, 2}}},
-	{[8]int{64, 128, 64, 128, 64, 128, 64, 128}, [8]maskRounds{{0xff, 1}, {0xaa, 1}}},
-	{[8]int{128, 64, 128, 64, 128, 64, 128, 64}, [8]maskRounds{{0xff, 1}, {0x55, 1}}},
-	{[8]int{64, 192, 64, 192, 64, 192, 64, 192}, [8]maskRounds{{0xff, 1}, {0xaa, 2}}},
-	{[8]int{0, 64, 128, 0, 64, 128, 0, 64}, [8]maskRounds{{0xb6, 1}, {0x24, 1}}},
+	{[8]int{0, 0, 0, 0, 0, 0, 0, 0}, []maskRounds{}},
+	{[8]int{64, 0, 64, 0, 64, 0, 64, 0}, []maskRounds{{0x55, 1}}},
+	{[8]int{0, 64, 0, 64, 0, 64, 0, 64}, []maskRounds{{0xaa, 1}}},
+	{[8]int{64, 64, 64, 64, 64, 64, 64, 64}, []maskRounds{{0xff, 1}}},
+	{[8]int{128, 128, 128, 128, 128, 128, 128, 128}, []maskRounds{{0xff, 2}}},
+	{[8]int{64, 128, 64, 128, 64, 128, 64, 128}, []maskRounds{{0xff, 1}, {0xaa, 1}}},
+	{[8]int{128, 64, 128, 64, 128, 64, 128, 64}, []maskRounds{{0xff, 1}, {0x55, 1}}},
+	{[8]int{64, 192, 64, 192, 64, 192, 64, 192}, []maskRounds{{0xff, 1}, {0xaa, 2}}},
+	{[8]int{0, 64, 128, 0, 64, 128, 0, 64}, []maskRounds{{0xb6, 1}, {0x24, 1}}},
 	{[8]int{1 * 64, 2 * 64, 3 * 64, 4 * 64, 5 * 64, 6 * 64, 7 * 64, 8 * 64},
-		[8]maskRounds{{0xff, 1}, {0xfe, 1}, {0xfc, 1}, {0xf8, 1}, {0xf0, 1}, {0xe0, 1}, {0xc0, 1}, {0x80, 1}}},
+		[]maskRounds{{0xff, 1}, {0xfe, 1}, {0xfc, 1}, {0xf8, 1}, {0xf0, 1}, {0xe0, 1}, {0xc0, 1}, {0x80, 1}}},
 	{[8]int{2 * 64, 1 * 64, 3 * 64, 4 * 64, 5 * 64, 6 * 64, 7 * 64, 8 * 64},
-		[8]maskRounds{{0xff, 1}, {0xfd, 1}, {0xfc, 1}, {0xf8, 1}, {0xf0, 1}, {0xe0, 1}, {0xc0, 1}, {0x80, 1}}},
+		[]maskRounds{{0xff, 1}, {0xfd, 1}, {0xfc, 1}, {0xf8, 1}, {0xf0, 1}, {0xe0, 1}, {0xc0, 1}, {0x80, 1}}},
 	{[8]int{10 * 64, 20 * 64, 30 * 64, 40 * 64, 50 * 64, 60 * 64, 70 * 64, 80 * 64},
-		[8]maskRounds{{0xff, 10}, {0xfe, 10}, {0xfc, 10}, {0xf8, 10}, {0xf0, 10}, {0xe0, 10}, {0xc0, 10}, {0x80, 10}}},
+		[]maskRounds{{0xff, 10}, {0xfe, 10}, {0xfc, 10}, {0xf8, 10}, {0xf0, 10}, {0xe0, 10}, {0xc0, 10}, {0x80, 10}}},
 	{[8]int{10 * 64, 19 * 64, 27 * 64, 34 * 64, 40 * 64, 45 * 64, 49 * 64, 52 * 64},
-		[8]maskRounds{{0xff, 10}, {0xfe, 9}, {0xfc, 8}, {0xf8, 7}, {0xf0, 6}, {0xe0, 5}, {0xc0, 4}, {0x80, 3}}},
+		[]maskRounds{{0xff, 10}, {0xfe, 9}, {0xfc, 8}, {0xf8, 7}, {0xf0, 6}, {0xe0, 5}, {0xc0, 4}, {0x80, 3}}},
 }
 
 func TestGenerateMaskAndRounds(t *testing.T) {
@@ -169,28 +171,23 @@ func TestGenerateMaskAndRounds(t *testing.T) {
 	}
 }
 
-func TestBlocks(t *testing.T) {
+func testBlocks(t *testing.T, inputs [8][]byte) {
 
-	inputs := [8][]byte{}
 	want := [8]string{}
 	for i := range inputs {
-		inputs[i] = bytes.Repeat([]byte{0x61 + byte(i)}, (i+1)*64)
+		var d digest
+		d.s[0], d.s[1], d.s[2], d.s[3] = init0, init1, init2, init3
 
-		{
-			var d digest
-			d.s[0], d.s[1], d.s[2], d.s[3] = init0, init1, init2, init3
+		blockGeneric(&d, inputs[i])
 
-			blockGeneric(&d, inputs[i])
+		var digest [Size]byte
+		binary.LittleEndian.PutUint32(digest[0:], d.s[0])
+		binary.LittleEndian.PutUint32(digest[4:], d.s[1])
+		binary.LittleEndian.PutUint32(digest[8:], d.s[2])
+		binary.LittleEndian.PutUint32(digest[12:], d.s[3])
 
-			var digest [Size]byte
-			binary.LittleEndian.PutUint32(digest[0:], d.s[0])
-			binary.LittleEndian.PutUint32(digest[4:], d.s[1])
-			binary.LittleEndian.PutUint32(digest[8:], d.s[2])
-			binary.LittleEndian.PutUint32(digest[12:], d.s[3])
-
-			want[i] = fmt.Sprintf("%x", digest)
-			//fmt.Println(want[i])
-		}
+		want[i] = fmt.Sprintf("%x", digest)
+		//fmt.Println(want[i])
 	}
 
 	var s digest8
@@ -212,7 +209,36 @@ func TestBlocks(t *testing.T) {
 
 		got := fmt.Sprintf("%x", digest)
 		if got != want[i] {
-			t.Errorf("TestBlocks[%d], got %v, want %v", i, got, want[i])
+			t.Errorf("testBlocks[%d], got %v, want %v", i, got, want[i])
 		}
 	}
+}
+
+func TestBlocks(t *testing.T) {
+
+	t.Run("simple", func(t *testing.T) {
+		inputs := [8][]byte{}
+		for i := range inputs {
+			inputs[i] = bytes.Repeat([]byte{0x61 + byte(i)}, (i+1)*64)
+		}
+		testBlocks(t, inputs)
+	})
+	t.Run("random-content", func(t *testing.T) {
+		inputs := [8][]byte{}
+		for i := range inputs {
+			inputs[i] = make([]byte, (i+1)*64)
+			rand.Read(inputs[i])
+		}
+		testBlocks(t, inputs)
+	})
+	t.Run("random-sizes", func(t *testing.T) {
+		inputs := [8][]byte{}
+		for i := range inputs {
+			rand.Seed(time.Now().UnixNano())
+			size := rand.Intn(100) % (MaxBlockSize/64)
+			inputs[i] = make([]byte, size*64)
+			rand.Read(inputs[i])
+		}
+		testBlocks(t, inputs)
+	})
 }
