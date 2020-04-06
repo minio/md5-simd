@@ -44,3 +44,24 @@ var avx256md5consts = func(c []uint32) []uint32 {
 	}
 	return inf
 }(md5consts[:])
+
+// 16-way 4x uint32 digests in 4 zmm registers
+type digest16 struct {
+	v0, v1, v2, v3 [16]uint32
+}
+
+// Stack cache for 16x64 byte md5.BlockSize bytes.
+// Must be 32-byte aligned, so allocate 1024+64 and
+// align upwards at runtime.
+type cache16 [1024 + 64]byte
+
+// inflate the consts 16-way for 16x md5 (512 bit zmm registers)
+var avx512md5consts = func(c []uint32) []uint32 {
+	inf := make([]uint32, 16*len(c))
+	for i := range c {
+		for j := 0; j < 16; j++ {
+			inf[(i*16)+j] = c[i]
+		}
+	}
+	return inf
+}(md5consts[:])
