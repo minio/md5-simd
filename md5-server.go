@@ -34,6 +34,10 @@ const Size = 16
 const chunk = BlockSize
 const MaxBlockSize = 1024*1024*2
 
+// Estimated sleep time for a chunk of MaxBlockSize based
+// on 800 MB/sec hashing performance
+const WriteSleepMs = 1000 * MaxBlockSize / (800*1024*1024)
+
 // MD5 initialization constants
 const (
 	init0 = 0x67452301
@@ -81,7 +85,7 @@ func (d *Md5Digest) Reset() {
 // Write to digest
 func (d *Md5Digest) Write(p []byte) (nn int, err error) {
 	// break input into chunks of maximum MaxBlockSize size
-	for len(p) > 0 {
+	for {
 		l := len(p)
 		if l > MaxBlockSize {
 			l = MaxBlockSize
@@ -92,6 +96,12 @@ func (d *Md5Digest) Write(p []byte) (nn int, err error) {
 		}
 		nn += nnn
 		p = p[l:]
+
+		if len(p) == 0 {
+			break
+		}
+
+		time.Sleep(WriteSleepMs * time.Millisecond)
 	}
 	return
 }
