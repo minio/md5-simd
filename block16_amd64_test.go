@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func TestBlockAvx512(t *testing.T) {
+func TestBlock16(t *testing.T) {
 
 	input := [16][]byte{}
 
@@ -30,10 +30,9 @@ func TestBlockAvx512(t *testing.T) {
 		copy(base[bufs[i]:], input[i])
 	}
 
-	zreg := [64]byte{}
+	zreg := [64 * 4]byte{}
 
 	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64, &zreg)
 
 	fmt.Println(hex.Dump(zreg[:]))
 }
-
