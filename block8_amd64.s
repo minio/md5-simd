@@ -23,10 +23,8 @@ TEXT ·block8(SB), 4, $0-40
 #define sc Y6
 #define sd Y7
 
-#define tmp Y8
-#define xtmp X8
+#define tmp  Y8
 #define tmp2 Y9
-#define xtmp2 X9
 
 #define mask Y10
 #define off  Y11
@@ -34,12 +32,9 @@ TEXT ·block8(SB), 4, $0-40
 #define ones Y12
 
 #define rtmp1  Y13
-#define xrtmp1 X13
 #define rtmp2  Y14
-#define xrtmp2 X14
 
 #define mem   Y15
-#define xmem  X15
 
 #define dig    BX
 #define cache  CX
@@ -53,7 +48,7 @@ TEXT ·block8(SB), 4, $0-40
 
 #define prep(index) \
 	VMOVAPD    mask, rtmp2                      \
-	VGATHERDPS rtmp2, index*4(base)(off*1), mem
+	VPGATHERDD rtmp2, index*4(base)(off*1), mem
 
 #define load(index) \
 	VMOVAPD index*32(cache), mem
@@ -131,7 +126,7 @@ TEXT ·block8(SB), 4, $0-40
 	VMOVUPD 64(dig), c
 	VMOVUPD 96(dig), d
 
-	// load source buffer offsets offsets
+	// load source buffer offsets
 	VMOVUPD (AX), off
 
 	prepmask
