@@ -6,4 +6,4 @@ package md5simd
 func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 
 //go:noescape
-func block8Avx512(state *uint32, base uintptr, bufs *int32, cache *byte, n int, zreg *[64]byte)
+func block16(state *uint32, base uintptr, bufs *int32, cache *byte, n int, zreg *[64]byte)

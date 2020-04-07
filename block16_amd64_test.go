@@ -32,7 +32,7 @@ func TestBlockAvx512(t *testing.T) {
 
 	zreg := [64]byte{}
 
-	block8Avx512(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64, &zreg)
+	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64, &zreg)
 
 	fmt.Println(hex.Dump(zreg[:]))
 }

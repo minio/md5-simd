@@ -31,7 +31,7 @@
 	VPADDD  b, a, a
 
 
-TEXT ·block8Avx512(SB),4,$0-48
+TEXT ·block16(SB),4,$0-48
 
     MOVQ state+0(FP),BX
     MOVQ base+8(FP),SI
