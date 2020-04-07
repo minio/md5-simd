@@ -66,6 +66,17 @@
 	VMOVAPD b, tmp                 \
 	VPADDD  b, a, a
 
+#define ROUND4(a, b, c, d, index, const, shift) \
+	VPADDD 64*const(consts), a, a \
+	VPADDD mem, a, a              \
+	VORPS  b, tmp, tmp            \
+	VXORPS c, tmp, tmp            \
+	VPADDD tmp, a, a              \
+	load(index)                   \
+	roll(shift,a)                 \
+	VXORPS c, ones, tmp           \
+	VPADDD b, a, a
+
 TEXT ·block16(SB),4,$0-48
 
     MOVQ state+0(FP),BX
@@ -91,8 +102,8 @@ TEXT ·block16(SB),4,$0-48
 #define sc Z6
 #define sd Z7
 
-#define tmp  Z8
-#define xtmp X8
+#define tmp   Z8
+#define tmp2  Z9
 
 #define kmask K1
 #define ktmp  K2
@@ -125,7 +136,8 @@ TEXT ·block16(SB),4,$0-48
 	VMOVUPD (AX), off
 
 	prepmask
-//	VPCMPEQD ones, ones, ones
+	MOVQ $-1, AX
+	VPBROADCASTQ AX, ones
 
 loop:
 	VMOVAPD a, sa
@@ -210,6 +222,39 @@ loop:
 	ROUND3(d,a,b,c,15,0x2d,11)
 	ROUND3(c,d,a,b, 2,0x2e,16)
 	ROUND3(b,c,d,a, 0,0x2f,23)
+
+	VXORPS d, ones, tmp
+
+	ROUND4(a,b,c,d, 7,0x30, 6)
+	ROUND4(d,a,b,c,14,0x31,10)
+	ROUND4(c,d,a,b, 5,0x32,15)
+	ROUND4(b,c,d,a,12,0x33,21)
+	ROUND4(a,b,c,d, 3,0x34, 6)
+	ROUND4(d,a,b,c,10,0x35,10)
+	ROUND4(c,d,a,b, 1,0x36,15)
+	ROUND4(b,c,d,a, 8,0x37,21)
+	ROUND4(a,b,c,d,15,0x38, 6)
+	ROUND4(d,a,b,c, 6,0x39,10)
+	ROUND4(c,d,a,b,13,0x3a,15)
+	ROUND4(b,c,d,a, 4,0x3b,21)
+	ROUND4(a,b,c,d,11,0x3c, 6)
+	ROUND4(d,a,b,c, 2,0x3d,10)
+	ROUND4(c,d,a,b, 9,0x3e,15)
+	ROUND4(b,c,d,a, 0,0x3f,21)
+
+	VPADDD sa, a, a
+	VPADDD sb, b, b
+	VPADDD sc, c, c
+	VPADDD sd, d, d
+
+	LEAQ 64(base), base
+	SUBQ $64, count
+	JNE  loop
+
+	VMOVUPD a, (dig)
+	VMOVUPD b, 0x40(dig)
+	VMOVUPD c, 0x80(dig)
+	VMOVUPD d, 0xc0(dig)
 
     MOVQ zreg+40(FP),AX
     VMOVDQU32 a, (AX)
