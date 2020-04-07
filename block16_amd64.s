@@ -42,6 +42,29 @@
 	VMOVAPD c, tmp                 \
 	VPADDD  b, a, a
 
+#define ROUND2(a, b, c, d, index, const, shift) \
+	VPADDD  64*const(consts), a, a \
+	VPADDD  mem, a, a              \
+	VANDPS  b, tmp2, tmp2          \
+	VANDNPS c, tmp, tmp            \
+	load(index)                    \
+	VORPS   tmp, tmp2, tmp2        \
+	VMOVAPD c, tmp                 \
+	VPADDD  tmp2, a, a             \
+	VMOVAPD c, tmp2                \
+	roll(shift,a)                  \
+	VPADDD  b, a, a
+
+#define ROUND3(a, b, c, d, index, const, shift) \
+	VPADDD  64*const(consts), a, a \
+	VPADDD  mem, a, a              \
+	load(index)                    \
+	VXORPS  d, tmp, tmp            \
+	VXORPS  b, tmp, tmp            \
+	VPADDD  tmp, a, a              \
+	roll(shift,a)                  \
+	VMOVAPD b, tmp                 \
+	VPADDD  b, a, a
 
 TEXT ·block16(SB),4,$0-48
 
@@ -146,6 +169,47 @@ loop:
 	store(15)
 
 	ROUND1load(b,c,d,a, 0,0x0f,22)
+
+	load(1)
+	VMOVAPD d, tmp
+	VMOVAPD d, tmp2
+
+	ROUND2(a,b,c,d, 6,0x10, 5)
+	ROUND2(d,a,b,c,11,0x11, 9)
+	ROUND2(c,d,a,b, 0,0x12,14)
+	ROUND2(b,c,d,a, 5,0x13,20)
+	ROUND2(a,b,c,d,10,0x14, 5)
+	ROUND2(d,a,b,c,15,0x15, 9)
+	ROUND2(c,d,a,b, 4,0x16,14)
+	ROUND2(b,c,d,a, 9,0x17,20)
+	ROUND2(a,b,c,d,14,0x18, 5)
+	ROUND2(d,a,b,c, 3,0x19, 9)
+	ROUND2(c,d,a,b, 8,0x1a,14)
+	ROUND2(b,c,d,a,13,0x1b,20)
+	ROUND2(a,b,c,d, 2,0x1c, 5)
+	ROUND2(d,a,b,c, 7,0x1d, 9)
+	ROUND2(c,d,a,b,12,0x1e,14)
+	ROUND2(b,c,d,a, 0,0x1f,20)
+
+	load(5)
+	VMOVAPD c, tmp
+
+	ROUND3(a,b,c,d, 8,0x20, 4)
+	ROUND3(d,a,b,c,11,0x21,11)
+	ROUND3(c,d,a,b,14,0x22,16)
+	ROUND3(b,c,d,a, 1,0x23,23)
+	ROUND3(a,b,c,d, 4,0x24, 4)
+	ROUND3(d,a,b,c, 7,0x25,11)
+	ROUND3(c,d,a,b,10,0x26,16)
+	ROUND3(b,c,d,a,13,0x27,23)
+	ROUND3(a,b,c,d, 0,0x28, 4)
+	ROUND3(d,a,b,c, 3,0x29,11)
+	ROUND3(c,d,a,b, 6,0x2a,16)
+	ROUND3(b,c,d,a, 9,0x2b,23)
+	ROUND3(a,b,c,d,12,0x2c, 4)
+	ROUND3(d,a,b,c,15,0x2d,11)
+	ROUND3(c,d,a,b, 2,0x2e,16)
+	ROUND3(b,c,d,a, 0,0x2f,23)
 
     MOVQ zreg+40(FP),AX
     VMOVDQU32 a, (AX)
