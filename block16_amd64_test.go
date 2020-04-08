@@ -1,7 +1,6 @@
 package md5simd
 
 import (
-	"bytes"
 	"encoding/hex"
 	_ "fmt"
 	"strings"
@@ -9,21 +8,38 @@ import (
 	"unsafe"
 )
 
+func Reverse(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}
+
 func TestBlock16(t *testing.T) {
 
 	input := [16][]byte{}
 
-	for i := range input {
-		input[i] = bytes.Repeat([]byte{0x61 + byte(i*1)}, 64)
+	gld, i := golden[8:], 0
+	// fill initial test vectors from golden test vectors with length >= 64
+	for g := range gld {
+		if len(gld[g].in) >= 64 {
+			input[i] = []byte(gld[g].in[:64])
+			i++
+			if i >= 8 /*len(input)*/ {
+				break
+			}
+		}
+	}
+	// fill upper 8 test vectors with the reverse strings of lower
+	for ; i < len(input); i++ {
+		input[i] = []byte(Reverse(string(input[i-8])))
 	}
 
 	var s digest16
 	for i := 0; i < 16; i++ {
 		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
 	}
-
-	// TODO: See if we can eliminate cache altogether (with 32 ZMM registers)
-	var cache cache16 // stack storage for block16 tmp state
 
 	bufs := [16]int32{4, 4 + MaxBlockSize, 4 + MaxBlockSize*2, 4 + MaxBlockSize*3, 4 + MaxBlockSize*4, 4 + MaxBlockSize*5, 4 + MaxBlockSize*6, 4 + MaxBlockSize*7,
 		4 + MaxBlockSize*8, 4 + MaxBlockSize*9, 4 + MaxBlockSize*10, 4 + MaxBlockSize*11, 4 + MaxBlockSize*12, 4 + MaxBlockSize*13, 4 + MaxBlockSize*14, 4 + MaxBlockSize*15}
@@ -36,25 +52,25 @@ func TestBlock16(t *testing.T) {
 
 	zreg := [64 * 4]byte{}
 
-	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], 64, &zreg)
+	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], 64, &zreg)
 
 	want :=
-		`00000000  56 ff d4 89 9a 41 30 f2  71 99 67 b6 9c e5 d0 d2  |V....A0.q.g.....|
-00000010  f1 8e 1e 44 71 dc 3f 4a  d3 84 88 69 3e b0 a1 53  |...Dq.?J...i>..S|
-00000020  d0 fb 78 5b 61 29 05 29  04 cb ba 5d 81 e9 a6 78  |..x[a).)...]...x|
-00000030  08 04 f9 19 b8 44 5c 67  0c 5a 7c 0b 1f c0 85 bf  |.....D\g.Z|.....|
-00000040  62 d9 5c 12 4e fe 09 50  5a 70 67 57 d8 a3 1a 6f  |b.\.N..PZpgW...o|
-00000050  56 8e eb af bb d0 45 66  ad a7 5b dc 23 3e d5 66  |V.....Ef..[.#>.f|
-00000060  71 1d 01 63 93 a0 63 e2  3a 6b 69 e7 8a b7 2c 94  |q..c..c.:ki...,.|
-00000070  1e 79 57 c8 61 89 60 92  11 5b ab 90 b5 17 ca 3e  |.yW.a....[.....>|
-00000080  33 de ca 69 2f 85 c6 ba  c1 6e 29 16 88 df 8b 8b  |3..i/....n).....|
-00000090  ae d8 00 6d a6 e6 d4 84  59 c7 f7 eb 26 61 dc af  |...m....Y...&a..|
-000000a0  9a 79 e2 e3 1a 50 e4 1f  a2 54 e3 ce 0c d7 7f ca  |.y...P...T......|
-000000b0  7d 1a 71 ac 94 14 25 dc  6a 6d 50 b6 2d 66 7b f4  |}.q...%.jmP.-f{.|
-000000c0  25 e3 33 00 2f cc 31 e6  f2 a2 56 25 12 69 4c 9f  |%.3./.1...V%.iL.|
-000000d0  84 17 92 91 44 6f ea d6  db b0 08 42 dd 4f 9c b3  |....Do.....B.O..|
-000000e0  69 e1 de 49 d7 9d c1 22  21 8a b5 f0 4a 71 74 9c  |i..I..."!...Jqt.|
-000000f0  06 d4 de f2 7e ac 6b ae  0b 2c 1d 18 1e 5f 03 67  |....~.k..,..._.g|
+		`00000000  82 3c 09 52 b9 77 11 2a  65 ee 4c 82 f9 ad 4d 28  |.<.R.w.*e.L...M(|
+00000010  82 53 aa b9 4d 9c 94 07  93 c7 ce 70 9b 18 c9 a7  |.S..M......p....|
+00000020  4a 95 90 aa 8f 8f f6 29  59 b3 95 9f 5f 3c b0 08  |J......)Y..._<..|
+00000030  56 1d 88 66 26 d7 12 cc  e4 41 2f 07 1b 7c 1a 4d  |V..f&....A/..|.M|
+00000040  ab 71 57 fc 43 2d ee a3  b5 a8 11 9a 3d e2 33 84  |.qW.C-......=.3.|
+00000050  41 b0 a7 71 38 3e 16 e6  8c 23 80 fa f2 18 45 c3  |A..q8>...#....E.|
+00000060  72 08 7e 17 a6 52 b7 a9  24 38 d1 44 f1 12 ec a2  |r.~..R..$8.D....|
+00000070  bb 0a 2c c5 7a cc a2 49  bf 44 a2 1b 0f fe 08 49  |..,.z..I.D.....I|
+00000080  9f 5d 41 c2 1b 45 75 aa  36 3a 05 f9 36 a9 14 18  |.]A..Eu.6:..6...|
+00000090  e1 1c f8 67 52 f4 59 c8  de 2e c6 c1 24 f3 fd 82  |...gR.Y.....$...|
+000000a0  7c 0d c0 7d 2a 1e f4 9e  60 f9 0e 11 b9 fd a5 79  ||..}*..........y|
+000000b0  57 9d 20 80 cc f3 da 4e  ec 7b 5d 2b 71 86 1d e0  |W. ....N.{]+q...|
+000000c0  06 db 9c fa 5d fa 1f 90  fc 1f f4 61 cc 2c 8e 3a  |....]......a.,.:|
+000000d0  87 84 9f 50 39 78 ec 5b  01 a8 be fa 0a 0b 5f 9d  |...P9x.[......_.|
+000000e0  75 e1 ce 30 97 4c 9e 87  6d b4 1c e8 ae 59 0f cd  |u..0.L..m....Y..|
+000000f0  7e 4d a1 cf 85 2d 33 1d  4a a7 0f 36 26 9e fd 37  |~M...-3.J..6&..7|
 `
 
 	got := hex.Dump(zreg[:])
