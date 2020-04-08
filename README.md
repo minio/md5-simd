@@ -7,6 +7,13 @@ This package is based upon the [md5vec](https://github.com/igneous-systems/md5ve
 
 ## Performance
 
+AVX2 (= 8 lanes) vs AVX512 (= 16 lanes) `block()` performance:
+
+```
+BenchmarkBlock8-4        9695575               124 ns/op        4144.80 MB/s           0 B/op          0 allocs/op
+BenchmarkBlock16-4       7173894               167 ns/op        6122.07 MB/s           0 B/op          0 allocs/op
+```
+
 Single core performance (aggregated) for different block sizes:
 
 ```

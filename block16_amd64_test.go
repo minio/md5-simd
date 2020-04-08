@@ -1,6 +1,7 @@
 package md5simd
 
 import (
+	"bytes"
 	"encoding/hex"
 	_ "fmt"
 	"strings"
@@ -75,5 +76,70 @@ func TestBlock16(t *testing.T) {
 	got = strings.ReplaceAll(got, "`", ".")
 	if got != want {
 		t.Fatalf("got %s\n                    want %s", got, want)
+	}
+}
+
+func BenchmarkBlock8(b *testing.B) {
+
+	const size = 64
+
+	input := [8][]byte{}
+
+	for i := range input {
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i*1)}, size)
+	}
+
+	var s digest8
+	for i := 0; i < 8; i++ {
+		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
+	}
+
+	var cache cache8 // stack storage for block16 tmp state
+
+	bufs := [8]int32{4, 4 + MaxBlockSize, 4 + MaxBlockSize*2, 4 + MaxBlockSize*3, 4 + MaxBlockSize*4, 4 + MaxBlockSize*5, 4 + MaxBlockSize*6, 4 + MaxBlockSize*7}
+
+	base := make([]byte, 4+16*MaxBlockSize)
+
+	for i := 0; i < len(input); i++ {
+		copy(base[bufs[i]:], input[i])
+	}
+
+	b.SetBytes(int64(size * 8))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		block8(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], size)
+	}
+}
+
+func BenchmarkBlock16(b *testing.B) {
+
+	const size = 64
+	input := [16][]byte{}
+
+	for i := range input {
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i*1)}, size)
+	}
+
+	var s digest16
+	for i := 0; i < 16; i++ {
+		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
+	}
+
+	ptrs := [16]int64{}
+
+	for i := range ptrs {
+		ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
+	}
+
+	b.SetBytes(int64(size * 16))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	zreg := [64 * 4]byte{}
+
+	for j := 0; j < b.N; j++ {
+		block16(&s.v0[0], &ptrs[0], size, &zreg)
 	}
 }
