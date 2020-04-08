@@ -1,13 +1,10 @@
 
-#define prepmask \
-	KNOTQ K0, kmask
-
 #define prep(index) \
-	KMOVQ      kmask, ktmp                               \
-	VPGATHERQD index*4(base)(ptrsLow*1), ktmp, ymemLow   \
-	KMOVQ      kmask, ktmp                               \
-	VPGATHERQD index*4(base)(ptrsHigh*1), ktmp, ymemHigh \
-	VALIGND    $8, memHigh, memHigh, memHigh             \
+	KNOTQ	   K0, kmask								  \
+	VPGATHERQD index*4(base)(ptrsLow*1), kmask, ymemLow   \
+	KNOTQ	   K0, kmask								  \
+	VPGATHERQD index*4(base)(ptrsHigh*1), kmask, ymemHigh \
+	VALIGND    $8, memHigh, memHigh, memHigh              \
 	VPORD      memHigh, mem, mem
 
 #define roll(shift, a) \
@@ -88,23 +85,18 @@ TEXT ·block16(SB),4,$0-32
 #define sc Z6
 #define sd Z7
 
-#define tmp   Z8
-#define tmp2  Z9
-
+#define tmp       Z8
+#define tmp2      Z9
 #define ptrsLow  Z10
 #define ptrsHigh Z11
-
-#define ones Z12
-
-#define rtmp1  Z13
-
+#define ones     Z12
+#define rtmp1    Z13
 #define mem      Z15
 #define ymemLow  Y15
 #define memHigh  Z14
 #define ymemHigh Y14
 
 #define kmask K1
-#define ktmp  K2
 
 // ----------------------------------------------------------
 // Registers Z16 through to Z31 are used for caching purposes
@@ -126,7 +118,6 @@ TEXT ·block16(SB),4,$0-32
 	VMOVUPD 0x00(AX), ptrsLow
 	VMOVUPD 0x40(AX), ptrsHigh
 
-	prepmask
 	MOVQ $-1, AX
 	VPBROADCASTQ AX, ones
 
