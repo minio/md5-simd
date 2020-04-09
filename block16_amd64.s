@@ -1,10 +1,10 @@
 
 #define prep(index) \
-	KNOTQ	   K0, kmask								  \
-	VPGATHERQD index*4(base)(ptrsLow*1), kmask, ymemLow   \
-	KNOTQ	   K0, kmask								  \
-	VPGATHERQD index*4(base)(ptrsHigh*1), kmask, ymemHigh \
-	VALIGND    $8, memHigh, memHigh, memHigh              \
+	KMOVQ	   kmask, ktmp								 \
+	VPGATHERQD index*4(base)(ptrsLow*1), ktmp, ymemLow   \
+	KMOVQ	   kmask, ktmp								 \
+	VPGATHERQD index*4(base)(ptrsHigh*1), ktmp, ymemHigh \
+	VALIGND    $8, memHigh, memHigh, memHigh             \
 	VPORD      memHigh, mem, mem
 
 #define roll(shift, a) \
@@ -69,11 +69,12 @@
 
 TEXT ·block16(SB),4,$0-32
 
-    MOVQ state+0(FP), BX
-    XORQ SI, SI			// null out base pointer (using absolute 64-bit pointers)
-    MOVQ ptrs+8(FP), AX
-    MOVQ n+16(FP), DX
-    MOVQ ·avx512md5consts+0(SB), DI
+    MOVQ  state+0(FP), BX
+    XORQ  SI, SI			// null out base pointer (using absolute 64-bit pointers)
+    MOVQ  ptrs+8(FP), AX
+    KMOVQ mask+16(FP), K1
+    MOVQ  n+24(FP), DX
+    MOVQ  ·avx512md5consts+0(SB), DI
 
 #define a Z0
 #define b Z1
@@ -97,6 +98,7 @@ TEXT ·block16(SB),4,$0-32
 #define ymemHigh Y14
 
 #define kmask K1
+#define ktmp  K2
 
 // ----------------------------------------------------------
 // Registers Z16 through to Z31 are used for caching purposes

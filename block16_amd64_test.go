@@ -18,9 +18,7 @@ func Reverse(s string) string {
 	return string(runes)
 }
 
-func TestBlock16(t *testing.T) {
-
-	input := [16][]byte{}
+func block16Inputs() (input [16][]byte) {
 
 	gld, i := golden[8:], 0
 	// fill initial test vectors from golden test vectors with length >= 64
@@ -38,6 +36,13 @@ func TestBlock16(t *testing.T) {
 		input[i] = []byte(Reverse(string(input[i-8])))
 	}
 
+	return
+}
+
+func TestBlock16(t *testing.T) {
+
+	input := block16Inputs()
+
 	var s digest16
 	for i := 0; i < 16; i++ {
 		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
@@ -50,7 +55,7 @@ func TestBlock16(t *testing.T) {
 		// fmt.Printf("%016x\n", ptrs[i])
 	}
 
-	block16(&s.v0[0], &ptrs[0], 64)
+	block16(&s.v0[0], &ptrs[0], 0xffff, 64)
 
 	want :=
 		`00000000  82 3c 09 52 b9 77 11 2a  65 ee 4c 82 f9 ad 4d 28  |.<.R.w.*e.L...M(|
@@ -69,6 +74,68 @@ func TestBlock16(t *testing.T) {
 000000d0  87 84 9f 50 39 78 ec 5b  01 a8 be fa 0a 0b 5f 9d  |...P9x.[......_.|
 000000e0  75 e1 ce 30 97 4c 9e 87  6d b4 1c e8 ae 59 0f cd  |u..0.L..m....Y..|
 000000f0  7e 4d a1 cf 85 2d 33 1d  4a a7 0f 36 26 9e fd 37  |~M...-3.J..6&..7|
+`
+
+	state := [256]byte{}
+	for i := 0; i < 16; i++ {
+		binary.LittleEndian.PutUint32(state[0x00+i*4:], s.v0[i])
+		binary.LittleEndian.PutUint32(state[0x40+i*4:], s.v1[i])
+		binary.LittleEndian.PutUint32(state[0x80+i*4:], s.v2[i])
+		binary.LittleEndian.PutUint32(state[0xc0+i*4:], s.v3[i])
+	}
+
+	got := hex.Dump(state[:])
+	got = strings.ReplaceAll(got, "`", ".")
+	if got != want {
+		t.Fatalf("got %s\n                    want %s", got, want)
+	}
+}
+
+func TestBlock16Masked(t *testing.T) {
+
+	input := block16Inputs()
+
+	// Nil out every other input vector
+	for i := range input {
+		if (i & 1) == 1 {
+			input[i] = nil
+		}
+	}
+
+	const mask = 0x5555
+
+	var s digest16
+	for i := 0; i < 16; i++ {
+		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
+	}
+
+	ptrs := [16]int64{}
+
+	for i := range ptrs {
+		if input[i] != nil {
+			ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
+		}
+	}
+
+	block16(&s.v0[0], &ptrs[0], mask, 64)
+
+	want :=
+		`00000000  82 3c 09 52 ac 1d 1f 03  65 ee 4c 82 ac 1d 1f 03  |.<.R....e.L.....|
+00000010  82 53 aa b9 ac 1d 1f 03  93 c7 ce 70 ac 1d 1f 03  |.S.........p....|
+00000020  4a 95 90 aa ac 1d 1f 03  59 b3 95 9f ac 1d 1f 03  |J.......Y.......|
+00000030  56 1d 88 66 ac 1d 1f 03  e4 41 2f 07 ac 1d 1f 03  |V..f.....A/.....|
+00000040  ab 71 57 fc d0 8e a5 6e  b5 a8 11 9a d0 8e a5 6e  |.qW....n.......n|
+00000050  41 b0 a7 71 d0 8e a5 6e  8c 23 80 fa d0 8e a5 6e  |A..q...n.#.....n|
+00000060  72 08 7e 17 d0 8e a5 6e  24 38 d1 44 d0 8e a5 6e  |r.~....n$8.D...n|
+00000070  bb 0a 2c c5 d0 8e a5 6e  bf 44 a2 1b d0 8e a5 6e  |..,....n.D.....n|
+00000080  9f 5d 41 c2 b7 67 ab 1f  36 3a 05 f9 b7 67 ab 1f  |.]A..g..6:...g..|
+00000090  e1 1c f8 67 b7 67 ab 1f  de 2e c6 c1 b7 67 ab 1f  |...g.g.......g..|
+000000a0  7c 0d c0 7d b7 67 ab 1f  60 f9 0e 11 b7 67 ab 1f  ||..}.g.......g..|
+000000b0  57 9d 20 80 b7 67 ab 1f  ec 7b 5d 2b b7 67 ab 1f  |W. ..g...{]+.g..|
+000000c0  06 db 9c fa 91 77 31 74  fc 1f f4 61 91 77 31 74  |.....w1t...a.w1t|
+000000d0  87 84 9f 50 91 77 31 74  01 a8 be fa 91 77 31 74  |...P.w1t.....w1t|
+000000e0  75 e1 ce 30 91 77 31 74  6d b4 1c e8 91 77 31 74  |u..0.w1tm....w1t|
+000000f0  7e 4d a1 cf 91 77 31 74  4a a7 0f 36 91 77 31 74  |~M...w1tJ..6.w1t|
 `
 
 	state := [256]byte{}
@@ -145,6 +212,6 @@ func BenchmarkBlock16(b *testing.B) {
 	b.ResetTimer()
 
 	for j := 0; j < b.N; j++ {
-		block16(&s.v0[0], &ptrs[0], size)
+		block16(&s.v0[0], &ptrs[0], 0xffff, size)
 	}
 }
