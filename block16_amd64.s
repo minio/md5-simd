@@ -1,8 +1,8 @@
 
 #define prep(index) \
-	KMOVQ	   kmask, ktmp								 \
+	KMOVB	   kmaskL, ktmp								 \
 	VPGATHERQD index*4(base)(ptrsLow*1), ktmp, ymemLow   \
-	KMOVQ	   kmask, ktmp								 \
+	KMOVB	   kmaskH, ktmp								 \
 	VPGATHERQD index*4(base)(ptrsHigh*1), ktmp, ymemHigh \
 	VALIGND    $8, memHigh, memHigh, memHigh             \
 	VPORD      memHigh, mem, mem
@@ -97,8 +97,9 @@ TEXT ·block16(SB),4,$0-32
 #define memHigh  Z14
 #define ymemHigh Y14
 
-#define kmask K1
-#define ktmp  K2
+#define kmaskL K1
+#define kmaskH K2
+#define ktmp   K3
 
 // ----------------------------------------------------------
 // Registers Z16 through to Z31 are used for caching purposes
@@ -119,6 +120,10 @@ TEXT ·block16(SB),4,$0-32
 	// load source pointers
 	VMOVUPD 0x00(AX), ptrsLow
 	VMOVUPD 0x40(AX), ptrsHigh
+
+	// setup masks
+	KMOVW	   kmaskL, kmaskH
+	KSHIFTRW   $8, kmaskH, kmaskH
 
 	MOVQ $-1, AX
 	VPBROADCASTQ AX, ones
