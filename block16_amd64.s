@@ -236,10 +236,4 @@ loop:
 	VMOVUPD c, 0x80(dig)
 	VMOVUPD d, 0xc0(dig)
 
-    MOVQ zreg+24(FP),AX
-    VMOVDQU32 a, (AX)
-    VMOVDQU32 b, 0x40(AX)
-    VMOVDQU32 c, 0x80(AX)
-    VMOVDQU32 d, 0xc0(AX)
-
 	RET

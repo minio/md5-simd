@@ -2,6 +2,7 @@ package md5simd
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	_ "fmt"
 	"strings"
@@ -49,9 +50,7 @@ func TestBlock16(t *testing.T) {
 		// fmt.Printf("%016x\n", ptrs[i])
 	}
 
-	zreg := [64 * 4]byte{}
-
-	block16(&s.v0[0], &ptrs[0], 64, &zreg)
+	block16(&s.v0[0], &ptrs[0], 64)
 
 	want :=
 		`00000000  82 3c 09 52 b9 77 11 2a  65 ee 4c 82 f9 ad 4d 28  |.<.R.w.*e.L...M(|
@@ -72,7 +71,15 @@ func TestBlock16(t *testing.T) {
 000000f0  7e 4d a1 cf 85 2d 33 1d  4a a7 0f 36 26 9e fd 37  |~M...-3.J..6&..7|
 `
 
-	got := hex.Dump(zreg[:])
+	state := [256]byte{}
+	for i := 0; i < 16; i++ {
+		binary.LittleEndian.PutUint32(state[0x00+i*4:], s.v0[i])
+		binary.LittleEndian.PutUint32(state[0x40+i*4:], s.v1[i])
+		binary.LittleEndian.PutUint32(state[0x80+i*4:], s.v2[i])
+		binary.LittleEndian.PutUint32(state[0xc0+i*4:], s.v3[i])
+	}
+
+	got := hex.Dump(state[:])
 	got = strings.ReplaceAll(got, "`", ".")
 	if got != want {
 		t.Fatalf("got %s\n                    want %s", got, want)
@@ -137,9 +144,7 @@ func BenchmarkBlock16(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	zreg := [64 * 4]byte{}
-
 	for j := 0; j < b.N; j++ {
-		block16(&s.v0[0], &ptrs[0], size, &zreg)
+		block16(&s.v0[0], &ptrs[0], size)
 	}
 }
