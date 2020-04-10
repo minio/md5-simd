@@ -7,6 +7,7 @@ This package is based upon the [md5vec](https://github.com/igneous-systems/md5ve
 
 ## Performance
 
+### block function
 AVX2 (= 8 lanes) vs AVX512 (= 16 lanes) `block()` performance:
 
 ```
@@ -14,19 +15,43 @@ BenchmarkBlock8-4        9695575               124 ns/op        4144.80 MB/s    
 BenchmarkBlock16-4       7173894               167 ns/op        6122.07 MB/s           0 B/op          0 allocs/op
 ```
 
-Single core performance (aggregated) for different block sizes:
+### hash.Hash
+
+`crypto/md5` vs AVX2
 
 ```
-BenchmarkGolden/32KB-8             14199             85032 ns/op        3082.88 MB/s        1712 B/op         24 allocs/op
-BenchmarkGolden/64KB-8              7680            156312 ns/op        3354.11 MB/s        1838 B/op         26 allocs/op
-BenchmarkGolden/128KB-8             3788            303343 ns/op        3456.74 MB/s        2148 B/op         30 allocs/op
-BenchmarkGolden/256KB-8             1954            612922 ns/op        3421.57 MB/s        2921 B/op         42 allocs/op
-BenchmarkGolden/512KB-8              860           1383787 ns/op        3031.03 MB/s        5092 B/op         73 allocs/op
-BenchmarkGolden/1MB-8                408           2904512 ns/op        2888.13 MB/s       10242 B/op        147 allocs/op
-BenchmarkGolden/2MB-8                202           5908945 ns/op        2839.29 MB/s       22042 B/op        317 allocs/op
+benchmark                   old MB/s     new MB/s     speedup
+BenchmarkGolden/32KB-4      688.29       2928.75      4.26x
+BenchmarkGolden/64KB-4      687.97       2937.95      4.27x
+BenchmarkGolden/128KB-4     687.91       2676.93      3.89x
+BenchmarkGolden/256KB-4     687.84       2644.37      3.84x
+BenchmarkGolden/512KB-4     687.94       2630.64      3.82x
+BenchmarkGolden/1MB-4       687.88       2030.45      2.95x
+BenchmarkGolden/2MB-4       687.75       1732.51      2.52x
 ```
 
-### TODO
- 
-- [ ] Add support for varying messages lengths
-- [ ] Investigate support for AVX512 (offering up to 16x parallel execution)
+`crypto/md5` vs AVX512
+
+```
+benchmark                   old MB/s     new MB/s     speedup
+BenchmarkGolden/32KB-4      688.29       3427.50      4.98x
+BenchmarkGolden/64KB-4      687.97       3788.35      5.51x
+BenchmarkGolden/128KB-4     687.91       3612.76      5.25x
+BenchmarkGolden/256KB-4     687.84       3800.89      5.53x
+BenchmarkGolden/512KB-4     687.94       3832.28      5.57x
+BenchmarkGolden/1MB-4       687.88       4086.52      5.94x
+BenchmarkGolden/2MB-4       687.75       3295.48      4.79x
+```
+
+AVX2 vs AVX512
+
+```
+benchmark                   old MB/s     new MB/s     speedup
+BenchmarkGolden/32KB-4      2928.75      3427.50      1.17x
+BenchmarkGolden/64KB-4      2937.95      3788.35      1.29x
+BenchmarkGolden/128KB-4     2676.93      3612.76      1.35x
+BenchmarkGolden/256KB-4     2644.37      3800.89      1.44x
+BenchmarkGolden/512KB-4     2630.64      3832.28      1.46x
+BenchmarkGolden/1MB-4       2030.45      4086.52      2.01x
+BenchmarkGolden/2MB-4       1732.51      3295.48      1.90x
+```
