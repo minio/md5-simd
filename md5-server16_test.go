@@ -63,3 +63,87 @@ func TestGolangGolden16(t *testing.T) {
 		}
 	}
 }
+
+func benchmarkGolden16(b *testing.B, blockSize int) {
+
+	server := NewMd5Server16()
+	h16 := [16]hash.Hash{}
+	input := [16][]byte{}
+	for i := range h16 {
+		h16[i] = NewMd5_x16(server)
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
+	}
+
+	b.SetBytes(int64(blockSize * 16))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		for i := range h16 {
+			h16[i].Write(input[i])
+		}
+	}
+}
+
+func BenchmarkGolden16(b *testing.B) {
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkGolden16(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkGolden16(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkGolden16(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkGolden16(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkGolden16(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkGolden16(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkGolden16(b, 2*1024*1024)
+	})
+}
+
+func benchmarkCryptoMd5(b *testing.B, blockSize int) {
+
+	input := bytes.Repeat([]byte{0x61}, blockSize)
+
+	b.SetBytes(int64(blockSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	h := md5.New()
+
+	for j := 0; j < b.N; j++ {
+		h.Write(input)
+	}
+}
+
+func BenchmarkCryptoMd5(b *testing.B) {
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 2*1024*1024)
+	})
+}
