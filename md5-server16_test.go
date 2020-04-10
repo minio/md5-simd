@@ -38,3 +38,28 @@ func TestGolden16(t *testing.T) {
 	}
 }
 
+func TestGolangGolden16(t *testing.T) {
+
+	server := NewMd5Server16()
+	h16 := [16]hash.Hash{}
+	for i := range h16 {
+		h16[i] = NewMd5_x16(server)
+	}
+
+	// Skip first 8, so we even 2 rounds of 16 test vectors
+	golden16 := golden[8:]
+
+	for tc := 0; tc < len(golden16); tc += 16 {
+		for i := range h16 {
+			h16[i].Reset()
+			h16[i].Write([]byte(golden16[tc+i].in))
+		}
+
+		for i := range h16 {
+			digest := h16[i].Sum([]byte{})
+			if fmt.Sprintf("%x", digest) != golden16[tc+i].want {
+				t.Errorf("TestGolangGolden[%d], got %v, want %v", tc+i, fmt.Sprintf("%x", digest), golden16[tc+i].want)
+			}
+		}
+	}
+}
