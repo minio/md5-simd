@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"unsafe"
+	"github.com/klauspost/cpuid"
 )
 
 func Reverse(s string) string {
@@ -40,6 +41,10 @@ func block16Inputs() (input [16][]byte) {
 }
 
 func TestBlock16(t *testing.T) {
+
+	if !cpuid.CPU.AVX512F() {
+		t.SkipNow()
+	}
 
 	input := block16Inputs()
 
@@ -92,6 +97,10 @@ func TestBlock16(t *testing.T) {
 }
 
 func TestBlock16Masked(t *testing.T) {
+
+	if !cpuid.CPU.AVX512F() {
+		t.SkipNow()
+	}
 
 	input := block16Inputs()
 
@@ -188,6 +197,10 @@ func BenchmarkBlock8(b *testing.B) {
 }
 
 func BenchmarkBlock16(b *testing.B) {
+
+	if !cpuid.CPU.AVX512F() {
+		b.SkipNow()
+	}
 
 	const size = 64
 	input := [16][]byte{}

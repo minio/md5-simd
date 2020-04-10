@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
+	"github.com/klauspost/cpuid"
 	"hash"
 	"testing"
 )
 
 func TestGolden16(t *testing.T) {
+
+	if !cpuid.CPU.AVX512F() {
+		t.SkipNow()
+	}
 
 	const megabyte = 1
 
@@ -39,6 +44,10 @@ func TestGolden16(t *testing.T) {
 }
 
 func TestGolangGolden16(t *testing.T) {
+
+	if !cpuid.CPU.AVX512F() {
+		t.SkipNow()
+	}
 
 	server := NewMd5Server16()
 	h16 := [16]hash.Hash{}
@@ -86,6 +95,11 @@ func benchmarkGolden16(b *testing.B, blockSize int) {
 }
 
 func BenchmarkGolden16(b *testing.B) {
+
+	if !cpuid.CPU.AVX512F() {
+		b.SkipNow()
+	}
+
 	b.Run("32KB", func(b *testing.B) {
 		benchmarkGolden16(b, 32*1024)
 	})
