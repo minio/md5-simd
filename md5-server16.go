@@ -3,8 +3,10 @@ package md5simd
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/klauspost/cpuid"
 	"hash"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -17,7 +19,38 @@ func NewMd5_x16(md5srv *Md5Server16) hash.Hash {
 }
 
 // Interface function to assembly code
-func blockMd5_x16(s *digest16, input [16][]byte) {
+func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte) {
+	if cpuid.CPU.AVX512F() {
+		blockMd5_x16_internal(s, input)
+	} else {
+		s8a, s8b := digest8{}, digest8{}
+		for i := range s8a.v0 {
+			j := i + 8
+			s8a.v0[i], s8a.v1[i], s8a.v2[i], s8a.v3[i] = s.v0[i], s.v1[i], s.v2[i], s.v3[i]
+			s8b.v0[i], s8b.v1[i], s8b.v2[i], s8b.v3[i] = s.v0[j], s.v1[j], s.v2[j], s.v3[j]
+		}
+
+		i8 := [2][8][]byte{}
+		for i := range i8[0] {
+			i8[0][i], i8[1][i] = input[i], input[8+i]
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		go func() { blockMd5(&s8a, i8[0], bases[0]); wg.Done() }()
+		go func() { blockMd5(&s8b, i8[1], bases[1]); wg.Done() }()
+		wg.Wait()
+
+		for i := range s8a.v0 {
+			j := i + 8
+			s.v0[i], s.v1[i], s.v2[i], s.v3[i] = s8a.v0[i], s8a.v1[i], s8a.v2[i], s8a.v3[i]
+			s.v0[j], s.v1[j], s.v2[j], s.v3[j] = s8b.v0[i], s8b.v1[i], s8b.v2[i], s8b.v3[i]
+		}
+	}
+}
+
+// Interface function to assembly code
+func blockMd5_x16_internal(s *digest16, input [16][]byte) {
 
 	// Sanity check to make sure we're not passing in more data than MaxBlockSize
 	{
@@ -59,6 +92,7 @@ type Md5Server16 struct {
 	totalIn  int                   // Total number of inputs waiting to be processed
 	lanes    [16]Md5LaneInfo       // Array with info per lane
 	digests  map[uint64][Size]byte // Map of uids to (interim) digest results
+	bases    [2][]byte			   // base memory (only for non-AVX512 mode)
 }
 
 // NewMd5Server16 - Create new object for parallel processing handling
@@ -66,6 +100,11 @@ func NewMd5Server16() *Md5Server16 {
 	md5srv := &Md5Server16{}
 	md5srv.digests = make(map[uint64][Size]byte)
 	md5srv.blocksCh = make(chan blockInput)
+	if !cpuid.CPU.AVX512F() {
+		// only reserve memory when not on AVX512
+		md5srv.bases[0] = make([]byte, 4+8*MaxBlockSize)
+		md5srv.bases[1] = make([]byte, 4+8*MaxBlockSize)
+	}
 
 	// Start a single thread for reading from the input channel
 	go md5srv.Process()
@@ -137,7 +176,7 @@ func (md5srv *Md5Server16) blocks() {
 	}
 
 	state := md5srv.getDigests()
-	blockMd5_x16(&state, inputs)
+	blockMd5_x16(&state, inputs, md5srv.bases)
 
 	md5srv.totalIn = 0
 	for i := 0; i < len(md5srv.lanes); i++ {
