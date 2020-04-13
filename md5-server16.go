@@ -3,7 +3,6 @@ package md5simd
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/klauspost/cpuid"
 	"hash"
 	"sort"
 	"sync"
@@ -20,7 +19,7 @@ func NewMd5_x16(md5srv *Md5Server16) hash.Hash {
 
 // Interface function to assembly code
 func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte) {
-	if cpuid.CPU.AVX512F() {
+	if hasAVX512 {
 		blockMd5_x16_internal(s, input)
 	} else {
 		s8a, s8b := digest8{}, digest8{}
@@ -100,7 +99,7 @@ func NewMd5Server16() *Md5Server16 {
 	md5srv := &Md5Server16{}
 	md5srv.digests = make(map[uint64][Size]byte)
 	md5srv.blocksCh = make(chan blockInput)
-	if !cpuid.CPU.AVX512F() {
+	if !hasAVX512 {
 		// only reserve memory when not on AVX512
 		md5srv.bases[0] = make([]byte, 4+8*MaxBlockSize)
 		md5srv.bases[1] = make([]byte, 4+8*MaxBlockSize)

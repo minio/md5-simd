@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
-	"github.com/klauspost/cpuid"
 	"hash"
 	"testing"
 )
 
 func TestGolden16(t *testing.T) {
 
-	if !cpuid.CPU.AVX512F() {
+	if !hasAVX512 {
 		t.SkipNow()
 	}
 
@@ -45,7 +44,7 @@ func TestGolden16(t *testing.T) {
 
 func TestGolangGolden16(t *testing.T) {
 
-	if !cpuid.CPU.AVX512F() {
+	if !hasAVX512 {
 		t.SkipNow()
 	}
 
@@ -96,7 +95,7 @@ func benchmarkGolden16(b *testing.B, blockSize int) {
 
 func BenchmarkGolden16(b *testing.B) {
 
-	if !cpuid.CPU.AVX512F() {
+	if !hasAVX512 {
 		b.SkipNow()
 	}
 

@@ -1,6 +1,9 @@
 package md5simd
 
+import "github.com/klauspost/cpuid"
+
 var hasAVX2 bool
+var hasAVX512 bool
 
 // 8-way 4x uint32 digests in 4 ymm registers
 // (ymm0, ymm1, ymm2, ymm3)
@@ -60,3 +63,8 @@ var avx512md5consts = func(c []uint32) []uint32 {
 	}
 	return inf
 }(md5consts[:])
+
+func init() {
+	hasAVX2 = cpuid.CPU.AVX2()
+	hasAVX512 = cpuid.CPU.AVX512F()
+}
