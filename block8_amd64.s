@@ -172,9 +172,8 @@ loop:
 	store(14)
 	ROUND1(c,d,a,b,15,0x0e,17)
 	store(15)
-	ROUND1load(b,c,d,a, 0,0x0f,22)
+	ROUND1load(b,c,d,a, 1,0x0f,22)
 
-	load(1)
 	VMOVAPD d, tmp
 	VMOVAPD d, tmp2
 
