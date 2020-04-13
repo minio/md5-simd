@@ -1,11 +1,21 @@
 
 # md5-simd
 
-SIMD accelerated MD5 package, allow up to 8 independent MD5 sums to be calculated on a single core.
+SIMD accelerated MD5 package, allowing up to either 8 (AVX2) or 16 (AVX512) independent MD5 sums to be calculated on a single CPU core.
 
-This package is based upon the [md5vec](https://github.com/igneous-systems/md5vec) repository by Igneous Systems. It integrates a similar mechanism as described in https://github.com/minio/sha256-simd#support-for-avx512 for making it easy for clients to take advantages of the parallel nature of the MD5 calculation, resulting in reduced overall CPU load. 
+This package was originally based on the [md5vec](https://github.com/igneous-systems/md5vec) repository by Igneous Systems, but has been made more flexible by  amongst others supporting different message sizes per lane.
+
+md5-simd integrates a similar mechanism as described in https://github.com/minio/sha256-simd#support-for-avx512 for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
+
+```
+Example
+```
 
 ## Performance
+
+```
+Add graph
+```
 
 ### block function
 AVX2 (= 8 lanes) vs AVX512 (= 16 lanes) `block()` performance:
@@ -55,3 +65,10 @@ BenchmarkGolden/512KB-4     2630.64      3832.28      1.46x
 BenchmarkGolden/1MB-4       2030.45      4086.52      2.01x
 BenchmarkGolden/2MB-4       1732.51      3295.48      1.90x
 ```
+
+## Design
+
+AVX2 vs AVX512
+- [ ] eliminate cache storage (use uppper Z registers instead)
+- [ ] eliminate intermediate buffer
+
