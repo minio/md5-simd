@@ -1,21 +1,22 @@
 
 # md5-simd
 
-SIMD accelerated MD5 package, allowing up to either 8 (AVX2) or 16 (AVX512) independent MD5 sums to be calculated on a single CPU core.
+This is a SIMD accelerated MD5 package, allowing up to either 8 (AVX2) or 16 (AVX512) independent MD5 sums to be calculated on a single CPU core.
 
-This package was originally based on the [md5vec](https://github.com/igneous-systems/md5vec) repository by Igneous Systems, but has been made more flexible by  amongst others supporting different message sizes per lane.
+It was originally based on the [md5vec](https://github.com/igneous-systems/md5vec) repository by Igneous Systems, but has been made more flexible by  amongst others supporting different message sizes per lane.
 
-md5-simd integrates a similar mechanism as described in https://github.com/minio/sha256-simd#support-for-avx512 for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
+`md5-simd` integrates a similar mechanism as described in https://github.com/minio/sha256-simd#support-for-avx512 for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
 
+It is important to understand that `md5-simd` **does not speed up** an individual MD5 hash sum (unless you would be using some hierarchical tree structure). Rather it allows multiple __independent__  MD5 sums to be computed in parallel on the same CPU core, thereby making more efficient usage of the computing resources.
 ```
 Example
 ```
 
 ## Performance
 
-```
-Add graph
-```
+The following chart compares the single-core performance between `crypto/md5` vs the AVX2 vs the AVX512 code:
+
+![md5-performance-overview](chart/Single-core-MD5-Aggregated-Hashing-Performance.png.png)
 
 ### block function
 AVX2 (= 8 lanes) vs AVX512 (= 16 lanes) `block()` performance:
@@ -27,7 +28,7 @@ BenchmarkBlock16-4       7173894               167 ns/op        6122.07 MB/s    
 
 ### hash.Hash
 
-`crypto/md5` vs AVX2
+Compared to `crypto/md5`, the AVX2 version is about 2.5 to 3.5 times faster:
 
 ```
 benchmark                   old MB/s     new MB/s     speedup
@@ -40,20 +41,7 @@ BenchmarkGolden/1MB-4       687.88       2030.45      2.95x
 BenchmarkGolden/2MB-4       687.75       1732.51      2.52x
 ```
 
-`crypto/md5` vs AVX512
-
-```
-benchmark                   old MB/s     new MB/s     speedup
-BenchmarkGolden/32KB-4      688.29       3427.50      4.98x
-BenchmarkGolden/64KB-4      687.97       3788.35      5.51x
-BenchmarkGolden/128KB-4     687.91       3612.76      5.25x
-BenchmarkGolden/256KB-4     687.84       3800.89      5.53x
-BenchmarkGolden/512KB-4     687.94       3832.28      5.57x
-BenchmarkGolden/1MB-4       687.88       4086.52      5.94x
-BenchmarkGolden/2MB-4       687.75       3295.48      4.79x
-```
-
-AVX2 vs AVX512
+Compared to AVX2, the AVX512 is up to 2x faster (especially for larger blocks)
 
 ```
 benchmark                   old MB/s     new MB/s     speedup
@@ -96,5 +84,7 @@ As such the AVX2 version uses an interim buffer to collect the byte slices to be
 For the AVX512 version this interim buffer is not needed since the AVX512 code uses a pair of `VPGATHERQD` instructions to directly dereference 64-bit pointers (from a base register address that is zero).
 
 Note that two instructions are needed because the AVX512 version processes 16-lanes in parallel, requiring 16x64 = 1024 bits in total. A simple `VALIGND` and `VPORD` are subsequently used to merge the lower and upper halves together into a total of 16 DWORDS.
+
+### Masking support
 
 Due to the fact that pointers are directly passed in from the Golang slices, we need to protect against NULL pointers. For this a 16-bit mask is passed in the AVX512 assembly code which is used during the `VPGATHERQD` instructions to mask out lanes that could otherwise result in segment violations.
