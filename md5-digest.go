@@ -115,4 +115,3 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 	d.final = true
 	return append(in, d.result[:]...)
 }
-

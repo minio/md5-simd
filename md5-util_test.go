@@ -1,8 +1,8 @@
 package md5simd
 
 import (
-	"testing"
 	"reflect"
+	"testing"
 )
 
 type maskTest struct {

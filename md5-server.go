@@ -28,11 +28,11 @@ import (
 const BlockSize = 64
 const Size = 16
 const chunk = BlockSize
-const MaxBlockSize = 1024*1024*2
+const MaxBlockSize = 1024 * 1024 * 2
 
 // Estimated sleep time for a chunk of MaxBlockSize based
 // on 800 MB/sec hashing performance
-const WriteSleepMs = 1000 * MaxBlockSize / (800*1024*1024)
+const WriteSleepMs = 1000 * MaxBlockSize / (800 * 1024 * 1024)
 
 // MD5 initialization constants
 const (
@@ -45,6 +45,7 @@ const (
 // Md5ServerUID - Do not start at 0 but next multiple of 8 so as to be able to
 // differentiate with default initialisation value of 0
 const Md5ServerUID = 8
+
 var uidCounter uint64 = 8 - 1
 
 var used_8 = uint64(0)
@@ -79,7 +80,7 @@ type Md5Server struct {
 	totalIn  int                   // Total number of inputs waiting to be processed
 	lanes    [16]Md5LaneInfo       // Array with info per lane
 	digests  map[uint64][Size]byte // Map of uids to (interim) digest results
-	bases    [2][]byte			   // base memory (only for non-AVX512 mode)
+	bases    [2][]byte             // base memory (only for non-AVX512 mode)
 }
 
 // NewMd5Server - Create new object for parallel processing handling

@@ -15,7 +15,7 @@ import (
 )
 
 func testMd5Simulator(t *testing.T, server *Md5Server) {
-	
+
 	rand.Seed(time.Now().UnixNano())
 	verifier := make(map[string]string)
 
