@@ -16,7 +16,7 @@ Example
 
 The following chart compares the single-core performance between `crypto/md5` vs the AVX2 vs the AVX512 code:
 
-![md5-performance-overview](chart/Single-core-MD5-Aggregated-Hashing-Performance.png.png)
+![md5-performance-overview](chart/Single-core-MD5-Aggregated-Hashing-Performance.png)
 
 ### block function
 AVX2 (= 8 lanes) vs AVX512 (= 16 lanes) `block()` performance:
