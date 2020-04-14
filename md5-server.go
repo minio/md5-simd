@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"hash"
+	"math/bits"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -167,6 +168,9 @@ func (d *Md5Digest) Sum(in []byte) (result []byte) {
 	return append(in, d.result[:]...)
 }
 
+var used_8 = uint64(0)
+var unused_8 = uint64(0)
+var capacity_8 = uint64(0)
 
 // Interface function to assembly code
 func blockMd5(s *digest8, input [8][]byte, base []byte) {
@@ -192,6 +196,10 @@ func blockMd5(s *digest8, input [8][]byte, base []byte) {
 	for _, m := range maskRounds {
 		var cache cache8 // stack storage for block8 tmp state
 		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
+
+		atomic.AddUint64(&used_8, uint64(bits.OnesCount(uint(m.mask)))*64*m.rounds)
+		atomic.AddUint64(&unused_8, (8-uint64(bits.OnesCount(uint(m.mask))))*64*m.rounds)
+		atomic.AddUint64(&capacity_8, 8*64*m.rounds)
 
 		for j := 0; j < len(bufs); j++ {
 			bufs[j] += int32(64*m.rounds) // update pointers for next round
