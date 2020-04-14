@@ -68,7 +68,33 @@ BenchmarkGolden/2MB-4       1732.51      3295.48      1.90x
 
 ## Design
 
-AVX2 vs AVX512
-- [ ] eliminate cache storage (use uppper Z registers instead)
-- [ ] eliminate intermediate buffer
+md5-simd has both an AVX2 (8-lane parallel) and an AVX512 (16-lane parallel version) algorithm to accelerate the computation with the following function definitions:
+```
+//go:noescape
+func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 
+//go:noescape
+func block16(state *uint32, ptrs *int64, mask uint64, n int)
+```
+
+The AVX2 version is based on the [md5vec](https://github.com/igneous-systems/md5vec) repository and is essentially unchanged except for minor (cosmetic) changes.
+
+The AVX512 version is derived from the AVX2 version but adds some further optimizations and simplifications.
+
+### Caching in upper ZMM registers
+
+The AVX2 version passes in a `cache8` block of memory (about 0.5 KB) for temporary storage of intermediate results during `ROUND1` which are subsequently used during `ROUND2` through to `ROUND4`.
+
+Since AVX512 has double the amount of registers (32 ZMM registers as compared to 16 YMM registers), it is possible to use the upper 16 ZMM registers for keeping the intermediate states on the CPU. As such, there is no need to pass in a corresponding `cache16` into the AVX512 block function.
+
+### Direct loading using 64-bit pointers
+
+The AVX2 uses the `VPGATHERDD` instruction (for YMM) to do a parallel load of 8 lanes using (8 independent) 32-bit offets. Since there is no control over where the 8 slices that are passed into the (Golang) `blockMd5` function are laid out into memory, it is not possible to derive a "base" address and corresponding offsets for all 8 slices.
+
+As such the AVX2 version uses an interim buffer to collect the byte slices to be hashed from all 8 inut slices and passed this buffer along with offets into the assembly code.
+
+For the AVX512 version this interim buffer is not needed since the AVX512 code uses a pair of `VPGATHERQD` instructions to directly dereference 64-bit pointers (from a base register address that is zero).
+
+Note that two instructions are needed because the AVX512 version processes 16-lanes in parallel, requiring 16x64 = 1024 bits in total. A simple `VALIGND` and `VPORD` are subsequently used to merge the lower and upper halves together into a total of 16 DWORDS.
+
+Due to the fact that pointers are directly passed in from the Golang slices, we need to protect against NULL pointers. For this a 16-bit mask is passed in the AVX512 assembly code which is used during the `VPGATHERQD` instructions to mask out lanes that could otherwise result in segment violations.
