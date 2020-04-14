@@ -1,10 +1,6 @@
 package md5simd
 
 import (
-	"bytes"
-	"crypto/md5"
-	"fmt"
-	"hash"
 	"reflect"
 	"testing"
 )
@@ -55,111 +51,6 @@ var golden = []md5Test{
 	{"The fugacity of a constituent in a mixture of gases at a given temperature is proportional to its mole fraction.  Lewis-Randall Rule", "72c2ed7592debca1c90fc0100f931a2f"},
 	{"How can you write a big system without C++?  -Paul Glick", "132f7619d33b523b1d9e5bd8e0928355"},
 	{"", "d41d8cd98f00b204e9800998ecf8427e"},
-}
-
-func TestGolangGolden(t *testing.T) {
-
-	server := NewMd5Server()
-	h8 := [8]hash.Hash{}
-	for i := range h8 {
-		h8[i] = NewMd5(server)
-	}
-
-	for tc := 0; tc < len(golden); tc += 8 {
-		for i := range h8 {
-			h8[i].Reset()
-			h8[i].Write([]byte(golden[tc+i].in))
-		}
-
-		for i := range h8 {
-			digest := h8[i].Sum([]byte{})
-			if fmt.Sprintf("%x", digest) != golden[tc+i].want {
-				t.Errorf("TestGolangGolden[%d], got %v, want %v", tc+i, fmt.Sprintf("%x", digest), golden[tc+i].want)
-			}
-		}
-	}
-}
-
-func testGolden(t *testing.T, megabyte int) {
-
-	server := NewMd5Server()
-	h8 := [8]hash.Hash{}
-	input := [8][]byte{}
-	for i := range h8 {
-		h8[i] = NewMd5(server)
-		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, megabyte*1024*1024)
-	}
-
-	for i := range h8 {
-		h8[i].Write(input[i])
-	}
-
-	for i := range h8 {
-		digest := h8[i].Sum([]byte{})
-		got := fmt.Sprintf("%x\n", digest)
-
-		h := md5.New()
-		h.Write(input[i])
-		want := fmt.Sprintf("%x\n", h.Sum(nil))
-
-		if got != want {
-			t.Errorf("TestGolden[%d], got %v, want %v", i, got, want)
-		}
-	}
-}
-
-func TestGolden(t *testing.T) {
-	t.Run("1MB", func(t *testing.T) {
-		testGolden(t, 1)
-	})
-	t.Run("2MB", func(t *testing.T) {
-		testGolden(t, 2)
-	})
-}
-
-func benchmarkGolden(b *testing.B, blockSize int) {
-
-	server := NewMd5Server()
-	h8 := [8]hash.Hash{}
-	input := [8][]byte{}
-	for i := range h8 {
-		h8[i] = NewMd5(server)
-		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
-	}
-
-	b.SetBytes(int64(blockSize*8))
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for j := 0; j < b.N; j++ {
-		for i := range h8 {
-			h8[i].Write(input[i])
-		}
-	}
-}
-
-func BenchmarkGolden(b *testing.B) {
-	b.Run("32KB", func(b *testing.B) {
-		benchmarkGolden(b, 32*1024)
-	})
-	b.Run("64KB", func(b *testing.B) {
-		benchmarkGolden(b, 64*1024)
-	})
-	b.Run("128KB", func(b *testing.B) {
-		benchmarkGolden(b, 128*1024)
-	})
-	b.Run("256KB", func(b *testing.B) {
-		benchmarkGolden(b, 256*1024)
-	})
-	b.Run("512KB", func(b *testing.B) {
-		benchmarkGolden(b, 512*1024)
-	})
-	b.Run("1MB", func(b *testing.B) {
-		benchmarkGolden(b, 1024*1024)
-	})
-	b.Run("2MB", func(b *testing.B) {
-		benchmarkGolden(b, 2*1024*1024)
-	})
 }
 
 type maskTest struct {
