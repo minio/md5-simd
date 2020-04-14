@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// Md5Digest16 - Type for computing MD5 using AVX2
-type Md5Digest16 struct {
+// Md5Digest - Type for computing MD5 using either AVX2 or AVX512
+type Md5Digest struct {
 	uid    uint64
-	md5srv *Md5Server16
+	md5srv *Md5Server
 	x      [chunk]byte
 	nx     int
 	len    uint64
@@ -18,13 +18,13 @@ type Md5Digest16 struct {
 }
 
 // Size - Return size of checksum
-func (d *Md5Digest16) Size() int { return Size }
+func (d *Md5Digest) Size() int { return Size }
 
 // BlockSize - Return blocksize of checksum
-func (d Md5Digest16) BlockSize() int { return BlockSize }
+func (d Md5Digest) BlockSize() int { return BlockSize }
 
 // Reset - reset digest to its initial values
-func (d *Md5Digest16) Reset() {
+func (d *Md5Digest) Reset() {
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, reset: true}
 	d.nx = 0
 	d.len = 0
@@ -32,7 +32,7 @@ func (d *Md5Digest16) Reset() {
 }
 
 // Write to digest
-func (d *Md5Digest16) Write(p []byte) (nn int, err error) {
+func (d *Md5Digest) Write(p []byte) (nn int, err error) {
 	// break input into chunks of maximum MaxBlockSize size
 	for {
 		l := len(p)
@@ -55,7 +55,7 @@ func (d *Md5Digest16) Write(p []byte) (nn int, err error) {
 	return
 }
 
-func (d *Md5Digest16) write(p []byte) (nn int, err error) {
+func (d *Md5Digest) write(p []byte) (nn int, err error) {
 
 	if d.final {
 		return 0, errors.New("Md5Digest already finalized. Reset first before writing again")
@@ -84,7 +84,7 @@ func (d *Md5Digest16) write(p []byte) (nn int, err error) {
 }
 
 // Sum - Return MD5 sum in bytes
-func (d *Md5Digest16) Sum(in []byte) (result []byte) {
+func (d *Md5Digest) Sum(in []byte) (result []byte) {
 
 	if d.final {
 		return append(in, d.result[:]...)

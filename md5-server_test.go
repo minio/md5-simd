@@ -1,8 +1,11 @@
 package md5simd
 
 import (
-	"reflect"
+	"fmt"
 	"testing"
+	"hash"
+	"bytes"
+	"crypto/md5"
 )
 
 type md5Test struct {
@@ -53,43 +56,154 @@ var golden = []md5Test{
 	{"", "d41d8cd98f00b204e9800998ecf8427e"},
 }
 
-type maskTest struct {
-	in  [8]int
-	out []maskRounds
-}
+func testGolden16(t *testing.T, megabyte int) {
 
-var goldenMask = []maskTest{
-	{[8]int{0, 0, 0, 0, 0, 0, 0, 0}, []maskRounds{}},
-	{[8]int{64, 0, 64, 0, 64, 0, 64, 0}, []maskRounds{{0x55, 1}}},
-	{[8]int{0, 64, 0, 64, 0, 64, 0, 64}, []maskRounds{{0xaa, 1}}},
-	{[8]int{64, 64, 64, 64, 64, 64, 64, 64}, []maskRounds{{0xff, 1}}},
-	{[8]int{128, 128, 128, 128, 128, 128, 128, 128}, []maskRounds{{0xff, 2}}},
-	{[8]int{64, 128, 64, 128, 64, 128, 64, 128}, []maskRounds{{0xff, 1}, {0xaa, 1}}},
-	{[8]int{128, 64, 128, 64, 128, 64, 128, 64}, []maskRounds{{0xff, 1}, {0x55, 1}}},
-	{[8]int{64, 192, 64, 192, 64, 192, 64, 192}, []maskRounds{{0xff, 1}, {0xaa, 2}}},
-	{[8]int{0, 64, 128, 0, 64, 128, 0, 64}, []maskRounds{{0xb6, 1}, {0x24, 1}}},
-	{[8]int{1 * 64, 2 * 64, 3 * 64, 4 * 64, 5 * 64, 6 * 64, 7 * 64, 8 * 64},
-		[]maskRounds{{0xff, 1}, {0xfe, 1}, {0xfc, 1}, {0xf8, 1}, {0xf0, 1}, {0xe0, 1}, {0xc0, 1}, {0x80, 1}}},
-	{[8]int{2 * 64, 1 * 64, 3 * 64, 4 * 64, 5 * 64, 6 * 64, 7 * 64, 8 * 64},
-		[]maskRounds{{0xff, 1}, {0xfd, 1}, {0xfc, 1}, {0xf8, 1}, {0xf0, 1}, {0xe0, 1}, {0xc0, 1}, {0x80, 1}}},
-	{[8]int{10 * 64, 20 * 64, 30 * 64, 40 * 64, 50 * 64, 60 * 64, 70 * 64, 80 * 64},
-		[]maskRounds{{0xff, 10}, {0xfe, 10}, {0xfc, 10}, {0xf8, 10}, {0xf0, 10}, {0xe0, 10}, {0xc0, 10}, {0x80, 10}}},
-	{[8]int{10 * 64, 19 * 64, 27 * 64, 34 * 64, 40 * 64, 45 * 64, 49 * 64, 52 * 64},
-		[]maskRounds{{0xff, 10}, {0xfe, 9}, {0xfc, 8}, {0xf8, 7}, {0xf0, 6}, {0xe0, 5}, {0xc0, 4}, {0x80, 3}}},
-}
+	server := NewMd5Server()
+	h16 := [16]hash.Hash{}
+	input := [16][]byte{}
+	for i := range h16 {
+		h16[i] = NewMd5(server)
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, megabyte*1024*1024)
+	}
 
-func TestGenerateMaskAndRounds(t *testing.T) {
-	input := [8][]byte{}
-	for gcase, g := range goldenMask {
-		for i, l := range g.in {
-			buf := make([]byte, l)
-			input[i] = buf[:]
-		}
+	for i := range h16 {
+		h16[i].Write(input[i])
+	}
 
-		mr := generateMaskAndRounds(input)
+	for i := range h16 {
+		digest := h16[i].Sum([]byte{})
+		got := fmt.Sprintf("%x\n", digest)
 
-		if !reflect.DeepEqual(mr, g.out) {
-			t.Fatalf("case %d: got %04x\n                    want %04x", gcase, mr, g.out)
+		h := md5.New()
+		h.Write(input[i])
+		want := fmt.Sprintf("%x\n", h.Sum(nil))
+
+		if got != want {
+			t.Errorf("TestGolden16[%d], got %v, want %v", i, got, want)
 		}
 	}
+}
+
+func TestGolden16(t *testing.T) {
+	t.Run("1MB", func(t *testing.T) {
+		testGolden16(t, 1)
+	})
+	t.Run("2MB", func(t *testing.T) {
+		testGolden16(t, 2)
+	})
+}
+
+func TestGolangGolden16(t *testing.T) {
+
+	server := NewMd5Server()
+	h16 := [16]hash.Hash{}
+	for i := range h16 {
+		h16[i] = NewMd5(server)
+	}
+
+	// Skip first 8, so we even 2 rounds of 16 test vectors
+	golden16 := golden[8:]
+
+	for tc := 0; tc < len(golden16); tc += 16 {
+		for i := range h16 {
+			h16[i].Reset()
+			h16[i].Write([]byte(golden16[tc+i].in))
+		}
+
+		for i := range h16 {
+			digest := h16[i].Sum([]byte{})
+			if fmt.Sprintf("%x", digest) != golden16[tc+i].want {
+				t.Errorf("TestGolangGolden[%d], got %v, want %v", tc+i, fmt.Sprintf("%x", digest), golden16[tc+i].want)
+			}
+		}
+	}
+}
+
+func benchmarkGolden16(b *testing.B, blockSize int) {
+
+	server := NewMd5Server()
+	h16 := [16]hash.Hash{}
+	input := [16][]byte{}
+	for i := range h16 {
+		h16[i] = NewMd5(server)
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
+	}
+
+	b.SetBytes(int64(blockSize * 16))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		for i := range h16 {
+			h16[i].Write(input[i])
+		}
+	}
+}
+
+func BenchmarkGolden16(b *testing.B) {
+
+	if !hasAVX512 {
+		b.SkipNow()
+	}
+
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkGolden16(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkGolden16(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkGolden16(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkGolden16(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkGolden16(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkGolden16(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkGolden16(b, 2*1024*1024)
+	})
+}
+
+func benchmarkCryptoMd5(b *testing.B, blockSize int) {
+
+	input := bytes.Repeat([]byte{0x61}, blockSize)
+
+	b.SetBytes(int64(blockSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	h := md5.New()
+
+	for j := 0; j < b.N; j++ {
+		h.Write(input)
+	}
+}
+
+func BenchmarkCryptoMd5(b *testing.B) {
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 2*1024*1024)
+	})
 }
