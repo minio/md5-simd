@@ -8,8 +8,24 @@ It was originally based on the [md5vec](https://github.com/igneous-systems/md5ve
 `md5-simd` integrates a similar mechanism as described in https://github.com/minio/sha256-simd#support-for-avx512 for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
 
 It is important to understand that `md5-simd` **does not speed up** an individual MD5 hash sum (unless you would be using some hierarchical tree structure). Rather it allows multiple __independent__  MD5 sums to be computed in parallel on the same CPU core, thereby making more efficient usage of the computing resources.
+
+## Usage
+
+In order to use `md5-simd`, you must first create an `Md5Server` which can subsequently be used to instantiate (one or more) objects for MD5 hashing. These objects conform to the regular `hash.Hash` interface and as such the normal Write/Reset/Sum functionality works as expected. 
+
+As an example: 
 ```
-Example
+    // Create server
+    server := NewMd5Server()
+
+    // Create hashing object (conforming to hash.Hash)
+    md5Hash := NewMd5(server)
+    
+    // Write one (or more) blocks
+    md5Hash.Write(block)
+    
+    // Return digest
+    digest := md5Hash.Sum([]byte{})
 ```
 
 ## Performance
@@ -17,16 +33,6 @@ Example
 The following chart compares the single-core performance between `crypto/md5` vs the AVX2 vs the AVX512 code:
 
 ![md5-performance-overview](chart/Single-core-MD5-Aggregated-Hashing-Performance.png)
-
-### block function
-AVX2 (= 8 lanes) vs AVX512 (= 16 lanes) `block()` performance:
-
-```
-BenchmarkBlock8-4        9695575               124 ns/op        4144.80 MB/s           0 B/op          0 allocs/op
-BenchmarkBlock16-4       7173894               167 ns/op        6122.07 MB/s           0 B/op          0 allocs/op
-```
-
-### hash.Hash
 
 Compared to `crypto/md5`, the AVX2 version is about 2.5 to 3.5 times faster:
 
@@ -53,6 +59,8 @@ BenchmarkGolden/512KB-4     2630.64      3832.28      1.46x
 BenchmarkGolden/1MB-4       2030.45      4086.52      2.01x
 BenchmarkGolden/2MB-4       1732.51      3295.48      1.90x
 ```
+
+These measurements were performed on AWS EC2 instance of type c5.xlarge equipped with a Xeon Platinum 8124M CPU at 3.0 GHz.
 
 ## Design
 
