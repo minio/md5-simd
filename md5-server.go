@@ -15,7 +15,6 @@ import (
 
 const BlockSize = 64
 const Size = 16
-const chunk = BlockSize
 const MaxBlockSize = 1024 * 1024 * 2
 
 // Estimated sleep time for a chunk of MaxBlockSize based

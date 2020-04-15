@@ -14,7 +14,7 @@ import (
 type Md5Digest struct {
 	uid    uint64
 	md5srv *Md5Server
-	x      [chunk]byte
+	x      [BlockSize]byte
 	nx     int
 	len    uint64
 	final  bool
@@ -70,14 +70,14 @@ func (d *Md5Digest) write(p []byte) (nn int, err error) {
 	if d.nx > 0 {
 		n := copy(d.x[d.nx:], p)
 		d.nx += n
-		if d.nx == chunk {
+		if d.nx == BlockSize {
 			d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: d.x[:]}
 			d.nx = 0
 		}
 		p = p[n:]
 	}
-	if len(p) >= chunk {
-		n := len(p) &^ (chunk - 1)
+	if len(p) >= BlockSize {
+		n := len(p) &^ (BlockSize - 1)
 		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: p[:n]}
 		p = p[n:]
 	}

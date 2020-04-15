@@ -8,8 +8,15 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
+	"github.com/remeh/sizedwaitgroup"
 	"hash"
 	"testing"
+	"math/rand"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type md5Test struct {
@@ -209,5 +216,72 @@ func BenchmarkCryptoMd5(b *testing.B) {
 	})
 	b.Run("2MB", func(b *testing.B) {
 		benchmarkCryptoMd5(b, 2*1024*1024)
+	})
+}
+
+func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, skipVerification bool, server *Md5Server) {
+
+	rand.Seed(time.Now().UnixNano())
+	verifier := make(map[string]string)
+
+	mu := sync.Mutex{}
+
+	swg := sizedwaitgroup.New(concurrency)
+	for _i := 0; _i < iterations; _i++ {
+		swg.Add()
+		go func(i int) {
+			defer swg.Done()
+			h := NewMd5(server)
+			mbs := 10 + rand.Intn(sizeVariation)
+			h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, mbs*1024*1024))
+			digest := fmt.Sprintf("%x", h.Sum([]byte{}))
+			mu.Lock()
+			verifier[fmt.Sprintf("%d-%d", i, mbs)] = digest
+			mu.Unlock()
+		}(_i)
+	}
+
+	swg.Wait()
+
+	if !skipVerification {
+		fmt.Printf("Verifying %d entries...\n", len(verifier))
+
+		swg = sizedwaitgroup.New(runtime.NumCPU())
+
+		for _input, _digest := range verifier {
+
+			swg.Add()
+			go func(input, digest string) {
+				defer swg.Done()
+
+				p := strings.Split(input, "-")
+				i, _ := strconv.Atoi(p[0])
+				mbs, _ := strconv.Atoi(p[1])
+
+				h := md5.New()
+				h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, mbs*1024*1024))
+				d := fmt.Sprintf("%x", h.Sum([]byte{}))
+
+				if digest != d {
+					t.Errorf("testMd5Simulator[%s], got %s, want %s", input, digest, d)
+				}
+			}(_input, _digest)
+		}
+		swg.Wait()
+
+		fmt.Println("Verification OK")
+	}
+}
+
+func TestMd5Simulator(t *testing.T) {
+
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	server := NewMd5Server()
+
+	t.Run("", func(t *testing.T) {
+		testMd5Simulator(t, 16, 1000, 100, false, server)
 	})
 }
