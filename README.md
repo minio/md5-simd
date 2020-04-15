@@ -88,3 +88,11 @@ Note that two instructions are needed because the AVX512 version processes 16-la
 ### Masking support
 
 Due to the fact that pointers are directly passed in from the Golang slices, we need to protect against NULL pointers. For this a 16-bit mask is passed in the AVX512 assembly code which is used during the `VPGATHERQD` instructions to mask out lanes that could otherwise result in segment violations.
+
+## License
+
+`md5-simd` is released under the MIT License. You can find the complete text in the file LICENSE.
+
+## Contributing
+
+Contributions are welcome, please send PRs for any enhancements.

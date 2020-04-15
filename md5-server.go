@@ -1,20 +1,8 @@
 //+build !noasm,!appengine
 
-/*
- * Minio Cloud Storage, (C) 2020 Minio, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2020 MinIO Inc. All rights reserved.
+// Use of this source code is governed by a license that can be
+// found in the LICENSE file.
 
 package md5simd
 
@@ -104,15 +92,19 @@ func (md5srv *Md5Server) Process() {
 	for {
 		select {
 		case block := <-md5srv.blocksCh:
+
+			// If reset message, reset and continue
 			if block.reset {
 				md5srv.reset(block.uid)
 				continue
 			}
-			index := block.uid % uint64(len(md5srv.lanes))
-			// fmt.Println("Adding message:", block.uid, index)
 
-			if md5srv.lanes[index].block != nil { // If slot is already filled, process all inputs
-				//fmt.Println("Invoking Blocks()")
+			// Get slot
+			index := block.uid % uint64(len(md5srv.lanes))
+
+			if md5srv.lanes[index].block != nil {
+				// If slot is already filled, process all inputs,
+				// including most probably previous block for same hash
 				md5srv.blocks()
 			}
 			md5srv.totalIn++
@@ -121,15 +113,13 @@ func (md5srv *Md5Server) Process() {
 				md5srv.lanes[index].outputCh = block.sumCh
 			}
 			if md5srv.totalIn == len(md5srv.lanes) {
-				// fmt.Println("Invoking Blocks() while FULL: ")
+				// if all lanes are filled, process all lanes
 				md5srv.blocks()
 			}
 
-			// TODO: test with larger timeout
 		case <-time.After(10 * time.Microsecond):
 			for _, lane := range md5srv.lanes {
 				if lane.block != nil { // check if there is any input to process
-					// fmt.Println("Invoking Blocks() on TIMEOUT: ")
 					md5srv.blocks()
 					break // we are done
 				}

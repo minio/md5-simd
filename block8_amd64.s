@@ -1,3 +1,8 @@
+// Copyright (c) 2018 Igneous Systems
+// Copyright (c) 2020 MinIO Inc. All rights reserved.
+// Use of this source code is governed by a license that can be
+// found in the LICENSE file.
+
 // block8(state *uint64, base uintptr, bufs *int32, cache *byte, n int)
 TEXT ·block8(SB), 4, $0-40
 	MOVQ state+0(FP), BX
