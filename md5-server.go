@@ -29,11 +29,10 @@ const (
 	init3 = 0x10325476
 )
 
-// Md5ServerUID - Do not start at 0 but next multiple of 8 so as to be able to
+// Md5ServerUID - Do not start at 0 but next multiple of 16 so as to be able to
 // differentiate with default initialisation value of 0
-const Md5ServerUID = 8
-
-var uidCounter uint64 = 8 - 1
+const Md5ServerUID = 16
+var uidCounter uint64 = Md5ServerUID - 1
 
 var used_8 = uint64(0)
 var unused_8 = uint64(0)
