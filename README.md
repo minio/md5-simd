@@ -11,7 +11,7 @@ It is important to understand that `md5-simd` **does not speed up** an individua
 
 ## Usage
 
-In order to use `md5-simd`, you must first create an `Md5Server` which can subsequently be used to instantiate (one or more) objects for MD5 hashing. These objects conform to the regular `hash.Hash` interface and as such the normal Write/Reset/Sum functionality works as expected. 
+In order to use `md5-simd`, you must first create an `Md5Server` which can subsequently be used to instantiate one (or more) objects for MD5 hashing. These objects conform to the regular `hash.Hash` interface and as such the normal Write/Reset/Sum functionality works as expected. 
 
 As an example: 
 ```
@@ -85,13 +85,13 @@ Since AVX512 has double the amount of registers (32 ZMM registers as compared to
 
 ### Direct loading using 64-bit pointers
 
-The AVX2 uses the `VPGATHERDD` instruction (for YMM) to do a parallel load of 8 lanes using (8 independent) 32-bit offets. Since there is no control over where the 8 slices that are passed into the (Golang) `blockMd5` function are laid out into memory, it is not possible to derive a "base" address and corresponding offsets for all 8 slices.
+The AVX2 uses the `VPGATHERDD` instruction (for YMM) to do a parallel load of 8 lanes using (8 independent) 32-bit offets. Since there is no control over how the 8 slices that are passed into the (Golang) `blockMd5` function are laid out into memory, it is not possible to derive a "base" address and corresponding offsets (all within 32-bits) for all 8 slices.
 
-As such the AVX2 version uses an interim buffer to collect the byte slices to be hashed from all 8 inut slices and passed this buffer along with offets into the assembly code.
+As such the AVX2 version uses an interim buffer to collect the byte slices to be hashed from all 8 inut slices and passed this buffer along with (fixed) 32-bit offsets into the assembly code.
 
-For the AVX512 version this interim buffer is not needed since the AVX512 code uses a pair of `VPGATHERQD` instructions to directly dereference 64-bit pointers (from a base register address that is zero).
+For the AVX512 version this interim buffer is not needed since the AVX512 code uses a pair of `VPGATHERQD` instructions to directly dereference 64-bit pointers (from a base register address that is initialized to zero).
 
-Note that two instructions are needed because the AVX512 version processes 16-lanes in parallel, requiring 16x64 = 1024 bits in total. A simple `VALIGND` and `VPORD` are subsequently used to merge the lower and upper halves together into a total of 16 DWORDS.
+Note that two load (gather) instructions are needed because the AVX512 version processes 16-lanes in parallel, requiring 16 times 64-bit = 1024 bits in total to be loaded. A simple `VALIGND` and `VPORD` are subsequently used to merge the lower and upper halves together into a single ZMM register (that contains 16 lanes of 32-bit DWORDS).
 
 ### Masking support
 
@@ -99,7 +99,7 @@ Due to the fact that pointers are directly passed in from the Golang slices, we 
 
 ## Low level block function performance
 
-The benchmark below shows the (single thread) maximum performane of the block() function for AVX2 (having 8 lanes) and AVX512 (having 16 lanes) `block()` performance:
+The benchmark below shows the (single thread) maximum performance of the `block()` function for AVX2 (having 8 lanes) and AVX512 (having 16 lanes) performance:
 
 ```
 BenchmarkBlock8-4        9695575               124 ns/op        4144.80 MB/s           0 B/op          0 allocs/op
@@ -108,15 +108,15 @@ BenchmarkBlock16-4       7173894               167 ns/op        6122.07 MB/s    
 
 ## Limitations
 
-As explained above `md5simd` does not speed up an individual MD5 hash sum computation (unless some hierarchical tree construct is used but this will result in different outcomes).
+As explained above `md5-simd` does not speed up an individual MD5 hash sum computation (unless some hierarchical tree construct is used but this will result in different outcomes).
 
 Instead it allows to run multiple MD5 calculations in parallel on a single CPU core. This can be beneficial in e.g. multi-threaded server applications where many go-routines are dealing with many requests and multiple MD5 calculations can be packed/scheduled for parallel execution on a single core.
 
 This will result in a lower overall CPU usage as compared to using the standard `crypto/md5` functionality where each MD5 hash computation will consume a single thread (core).
 
-It is best to test and measure the overall CPU usage in a representative usage scenario in your application to get an overall understanding of the benefits of `md5simd` as compared to `crypto/md5` (ideally under heavy CPU load).
+It is best to test and measure the overall CPU usage in a representative usage scenario in your application to get an overall understanding of the benefits of `md5-simd` as compared to `crypto/md5` (ideally under heavy CPU load).
 
-Also note that `md5simd` is best meant to work with large objects, so if your application only hashes small objects (KB-size rather than MB-size), you may be better of by using `crypto/md5`.
+Also note that `md5-simd` is best meant to work with large objects, so if your application only hashes small objects (KB-size rather than MB-size), you may be better of by using `crypto/md5`.
 
 ## License
 

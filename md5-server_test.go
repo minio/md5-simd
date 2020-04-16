@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"github.com/remeh/sizedwaitgroup"
 	"hash"
-	"testing"
 	"math/rand"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 )
 
