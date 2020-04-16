@@ -8,8 +8,6 @@ package md5simd
 
 import (
 	"encoding/binary"
-	"hash"
-	"sync/atomic"
 	"time"
 )
 
@@ -52,12 +50,6 @@ type Md5LaneInfo struct {
 	uid      uint64          // unique identification for this MD5 processing
 	block    []byte          // input block to be processed
 	outputCh chan [Size]byte // channel for output result
-}
-
-// NewMd5 - initialize instance for Md5 implementation.
-func NewMd5(md5srv *Md5Server) hash.Hash {
-	uid := atomic.AddUint64(&uidCounter, 1)
-	return &Md5Digest{uid: uid, md5srv: md5srv}
 }
 
 // Md5Server - Type to implement parallel handling of MD5 invocations

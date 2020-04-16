@@ -9,6 +9,7 @@ package md5simd
 import (
 	"fmt"
 	"github.com/klauspost/cpuid"
+	"hash"
 	"math/bits"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,12 @@ func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 
 //go:noescape
 func block16(state *uint32, ptrs *int64, mask uint64, n int)
+
+// NewMd5 - initialize instance for Md5 implementation.
+func NewMd5(md5srv *Md5Server) hash.Hash {
+	uid := atomic.AddUint64(&uidCounter, 1)
+	return &Md5Digest{uid: uid, md5srv: md5srv}
+}
 
 // 8-way 4x uint32 digests in 4 ymm registers
 // (ymm0, ymm1, ymm2, ymm3)
