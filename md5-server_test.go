@@ -180,6 +180,60 @@ func BenchmarkGolden16(b *testing.B) {
 	})
 }
 
+func benchmarkGoldenAvx2(b *testing.B, blockSize int) {
+
+	server := NewMd5Server()
+	h16 := [16]hash.Hash{}
+	input := [16][]byte{}
+	for i := range h16 {
+		h16[i] = NewMd5(server)
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
+	}
+
+	const cores = 2 // AVX2 runs on two cores, so split effective performance in half
+	b.SetBytes(int64(blockSize * 16 / cores))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		for i := range h16 {
+			h16[i].Write(input[i])
+		}
+	}
+}
+
+func BenchmarkGoldenAvx2(b *testing.B) {
+
+	restore := hasAVX512
+
+	// Make sure AVX512 is disabled
+	hasAVX512 = false
+
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkGoldenAvx2(b, 2*1024*1024)
+	})
+
+	hasAVX512 = restore
+}
+
 func benchmarkCryptoMd5(b *testing.B, blockSize int) {
 
 	input := bytes.Repeat([]byte{0x61}, blockSize)
