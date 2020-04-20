@@ -3,6 +3,8 @@
 // Use of this source code is governed by a license that can be
 // found in the LICENSE file.
 
+// This is the AVX2 implementation of the MD5 block function (8-way parallel)
+
 // block8(state *uint64, base uintptr, bufs *int32, cache *byte, n int)
 TEXT ·block8(SB), 4, $0-40
 	MOVQ state+0(FP), BX
