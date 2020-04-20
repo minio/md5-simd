@@ -80,39 +80,54 @@ func NewMd5Server() *Md5Server {
 
 // Process - Sole handler for reading from the input channel
 func (md5srv *Md5Server) Process() {
+
+	processBlock := func(block blockInput) {
+		// If reset message, reset and we're done
+		if block.reset {
+			md5srv.reset(block.uid)
+			return
+		}
+
+		// Get slot
+		index := block.uid % uint64(len(md5srv.lanes))
+
+		if md5srv.lanes[index].block != nil {
+			// If slot is already filled, process all inputs,
+			// including most probably previous block for same hash
+			md5srv.blocks()
+		}
+		md5srv.totalIn++
+		md5srv.lanes[index] = Md5LaneInfo{uid: block.uid, block: block.msg}
+		if block.final {
+			md5srv.lanes[index].outputCh = block.sumCh
+		}
+		if md5srv.totalIn == len(md5srv.lanes) {
+			// if all lanes are filled, process all lanes
+			md5srv.blocks()
+		}
+	}
+
 	for {
 		select {
 		case block := <-md5srv.blocksCh:
+			processBlock(block)
+		}
 
-			// If reset message, reset and continue
-			if block.reset {
-				md5srv.reset(block.uid)
-				continue
-			}
+		for busy := true; busy; {
+			select {
+			case block := <-md5srv.blocksCh:
+				processBlock(block)
 
-			// Get slot
-			index := block.uid % uint64(len(md5srv.lanes))
-
-			if md5srv.lanes[index].block != nil {
-				// If slot is already filled, process all inputs,
-				// including most probably previous block for same hash
-				md5srv.blocks()
-			}
-			md5srv.totalIn++
-			md5srv.lanes[index] = Md5LaneInfo{uid: block.uid, block: block.msg}
-			if block.final {
-				md5srv.lanes[index].outputCh = block.sumCh
-			}
-			if md5srv.totalIn == len(md5srv.lanes) {
-				// if all lanes are filled, process all lanes
-				md5srv.blocks()
-			}
-
-		case <-time.After(10 * time.Microsecond):
-			for _, lane := range md5srv.lanes {
-				if lane.block != nil { // check if there is any input to process
-					md5srv.blocks()
-					break // we are done
+			case <-time.After(10 * time.Microsecond):
+				l, lane := 0, Md5LaneInfo{}
+				for l, lane = range md5srv.lanes {
+					if lane.block != nil { // check if there is any input to process
+						md5srv.blocks()
+						break // we are done
+					}
+				}
+				if l == len(md5srv.lanes) { // no work to do, so exit this loop and go back to single select
+					busy = false
 				}
 			}
 		}
