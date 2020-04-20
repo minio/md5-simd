@@ -14,13 +14,7 @@ type lane struct {
 	pos uint
 }
 
-type lanes []lane
-
-func (lns lanes) Len() int           { return len(lns) }
-func (lns lanes) Swap(i, j int)      { lns[i], lns[j] = lns[j], lns[i] }
-func (lns lanes) Less(i, j int) bool { return lns[i].len < lns[j].len }
-
-// Helper struct for
+// Helper struct for generating number of rounds in combination with mask for valid lanes
 type maskRounds struct {
 	mask   uint64
 	rounds uint64
@@ -33,7 +27,7 @@ func generateMaskAndRounds8(input [8][]byte) (mr []maskRounds) {
 	for c, inpt := range input {
 		sorted[c] = lane{uint(len(inpt)), uint(c)}
 	}
-	sort.Sort(lanes(sorted[:]))
+	sort.Slice(sorted[:], func(i, j int) bool { return sorted[i].len < sorted[j].len } )
 
 	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
 	m, round := uint64(0xff), uint64(0)
@@ -58,7 +52,7 @@ func generateMaskAndRounds16(input [16][]byte) (mr []maskRounds) {
 	for c, inpt := range input {
 		sorted[c] = lane{uint(len(inpt)), uint(c)}
 	}
-	sort.Sort(lanes(sorted[:]))
+	sort.Slice(sorted[:], func(i, j int) bool { return sorted[i].len < sorted[j].len } )
 
 	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
 	m, round := uint64(0xffff), uint64(0)
