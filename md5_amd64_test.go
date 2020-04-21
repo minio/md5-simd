@@ -63,7 +63,7 @@ func benchmarkGoldenAvx2(b *testing.B, blockSize int) {
 		for i := range h16 {
 			h16[i].Write(input[i])
 		}
-		if false {
+		if true {
 			for i := range h16 {
 				_ = h16[i].Sum(tmp[:0])
 				// FIXME(fwessels): Broken, since Sum closes the stream.
@@ -91,7 +91,7 @@ func benchmarkGoldenAvx2P(b *testing.B, blockSize int) {
 			for i := range h16 {
 				h16[i].Write(input)
 			}
-			if false {
+			if true {
 				for i := range h16 {
 					_ = h16[i].Sum(tmp[:0])
 					// FIXME(fwessels): Broken, since Sum closes the stream.
