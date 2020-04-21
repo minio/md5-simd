@@ -17,10 +17,12 @@ As an example:
 ```
     // Create server
     server := md5simd.NewServer()
+    defer server.Close()
 
     // Create hashing object (conforming to hash.Hash)
     md5Hash := server.NewHash()
-    
+    defer md5Hash.Close()
+
     // Write one (or more) blocks
     md5Hash.Write(block)
     
