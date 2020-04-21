@@ -16,36 +16,57 @@ import (
 
 const benchmarkWithSum = true
 
-func BenchmarkGolden16(b *testing.B) {
+func benchmarkAvx512(b *testing.B, blockSize int) {
+
+	server := NewServer()
+	h16 := [16]hash.Hash{}
+	input := [16][]byte{}
+	for i := range h16 {
+		h16[i] = server.NewHash()
+		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
+	}
+
+	b.SetBytes(int64(blockSize * 16))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		for i := range h16 {
+			h16[i].Write(input[i])
+		}
+	}
+}
+
+func BenchmarkAvx512(b *testing.B) {
 
 	if !hasAVX512 {
 		b.SkipNow()
 	}
 
 	b.Run("32KB", func(b *testing.B) {
-		benchmarkGolden16(b, 32*1024)
+		benchmarkAvx512(b, 32*1024)
 	})
 	b.Run("64KB", func(b *testing.B) {
-		benchmarkGolden16(b, 64*1024)
+		benchmarkAvx512(b, 64*1024)
 	})
 	b.Run("128KB", func(b *testing.B) {
-		benchmarkGolden16(b, 128*1024)
+		benchmarkAvx512(b, 128*1024)
 	})
 	b.Run("256KB", func(b *testing.B) {
-		benchmarkGolden16(b, 256*1024)
+		benchmarkAvx512(b, 256*1024)
 	})
 	b.Run("512KB", func(b *testing.B) {
-		benchmarkGolden16(b, 512*1024)
+		benchmarkAvx512(b, 512*1024)
 	})
 	b.Run("1MB", func(b *testing.B) {
-		benchmarkGolden16(b, 1024*1024)
+		benchmarkAvx512(b, 1024*1024)
 	})
 	b.Run("2MB", func(b *testing.B) {
-		benchmarkGolden16(b, 2*1024*1024)
+		benchmarkAvx512(b, 2*1024*1024)
 	})
 }
 
-func benchmarkGoldenAvx2(b *testing.B, blockSize int) {
+func benchmarkAvx2(b *testing.B, blockSize int) {
 	server := NewServer()
 	defer server.Close()
 	h16 := [16]hash.Hash{}
@@ -76,7 +97,7 @@ func benchmarkGoldenAvx2(b *testing.B, blockSize int) {
 	}
 }
 
-func benchmarkGoldenAvx2P(b *testing.B, blockSize int) {
+func benchmarkAvx2P(b *testing.B, blockSize int) {
 	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -106,7 +127,7 @@ func benchmarkGoldenAvx2P(b *testing.B, blockSize int) {
 }
 
 // Runs with a single
-func benchmarkGoldenAvx2PSingle(b *testing.B, blockSize int) {
+func benchmarkAvx2PSingle(b *testing.B, blockSize int) {
 	b.SetBytes(int64(blockSize))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -128,7 +149,7 @@ func benchmarkGoldenAvx2PSingle(b *testing.B, blockSize int) {
 	})
 }
 
-func BenchmarkGoldenAvx2(b *testing.B) {
+func BenchmarkAvx2(b *testing.B) {
 
 	restore := hasAVX512
 
@@ -136,31 +157,31 @@ func BenchmarkGoldenAvx2(b *testing.B) {
 	hasAVX512 = false
 
 	b.Run("32KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 32*1024)
+		benchmarkAvx2(b, 32*1024)
 	})
 	b.Run("64KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 64*1024)
+		benchmarkAvx2(b, 64*1024)
 	})
 	b.Run("128KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 128*1024)
+		benchmarkAvx2(b, 128*1024)
 	})
 	b.Run("256KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 256*1024)
+		benchmarkAvx2(b, 256*1024)
 	})
 	b.Run("512KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 512*1024)
+		benchmarkAvx2(b, 512*1024)
 	})
 	b.Run("1MB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 1024*1024)
+		benchmarkAvx2(b, 1024*1024)
 	})
 	b.Run("2MB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 2*1024*1024)
+		benchmarkAvx2(b, 2*1024*1024)
 	})
 
 	hasAVX512 = restore
 }
 
-func BenchmarkGoldenAvx2Parallel(b *testing.B) {
+func BenchmarkAvx2Parallel(b *testing.B) {
 	if !cpuid.CPU.AVX2() {
 		b.SkipNow()
 	}
@@ -170,36 +191,36 @@ func BenchmarkGoldenAvx2Parallel(b *testing.B) {
 	hasAVX512 = false
 
 	b.Run("32KB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 32*1024)
+		benchmarkAvx2P(b, 32*1024)
 	})
 	b.Run("64KB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 64*1024)
+		benchmarkAvx2P(b, 64*1024)
 	})
 	b.Run("128KB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 128*1024)
+		benchmarkAvx2P(b, 128*1024)
 	})
 	b.Run("256KB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 256*1024)
+		benchmarkAvx2P(b, 256*1024)
 	})
 	b.Run("512KB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 512*1024)
+		benchmarkAvx2P(b, 512*1024)
 	})
 	b.Run("1MB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 1024*1024)
+		benchmarkAvx2P(b, 1024*1024)
 	})
 	b.Run("2MB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 2*1024*1024)
+		benchmarkAvx2P(b, 2*1024*1024)
 	})
 	b.Run("4MB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 4*1024*1024)
+		benchmarkAvx2P(b, 4*1024*1024)
 	})
 	b.Run("8MB", func(b *testing.B) {
-		benchmarkGoldenAvx2P(b, 8*1024*1024)
+		benchmarkAvx2P(b, 8*1024*1024)
 	})
 	hasAVX512 = restore
 }
 
-func BenchmarkGoldenAvx2ParallelSingle(b *testing.B) {
+func benchmarkAvx2ParallelSingle(b *testing.B) {
 	if !cpuid.CPU.AVX2() {
 		b.SkipNow()
 	}
@@ -209,31 +230,31 @@ func BenchmarkGoldenAvx2ParallelSingle(b *testing.B) {
 	hasAVX512 = false
 
 	b.Run("32KB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 32*1024)
+		benchmarkAvx2PSingle(b, 32*1024)
 	})
 	b.Run("64KB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 64*1024)
+		benchmarkAvx2PSingle(b, 64*1024)
 	})
 	b.Run("128KB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 128*1024)
+		benchmarkAvx2PSingle(b, 128*1024)
 	})
 	b.Run("256KB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 256*1024)
+		benchmarkAvx2PSingle(b, 256*1024)
 	})
 	b.Run("512KB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 512*1024)
+		benchmarkAvx2PSingle(b, 512*1024)
 	})
 	b.Run("1MB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 1024*1024)
+		benchmarkAvx2PSingle(b, 1024*1024)
 	})
 	b.Run("2MB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 2*1024*1024)
+		benchmarkAvx2PSingle(b, 2*1024*1024)
 	})
 	b.Run("4MB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 4*1024*1024)
+		benchmarkAvx2PSingle(b, 4*1024*1024)
 	})
 	b.Run("8MB", func(b *testing.B) {
-		benchmarkGoldenAvx2PSingle(b, 8*1024*1024)
+		benchmarkAvx2PSingle(b, 8*1024*1024)
 	})
 	hasAVX512 = restore
 }

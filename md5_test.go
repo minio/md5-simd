@@ -131,27 +131,6 @@ func TestGolangGolden16(t *testing.T) {
 	}
 }
 
-func benchmarkGolden16(b *testing.B, blockSize int) {
-
-	server := NewServer()
-	h16 := [16]hash.Hash{}
-	input := [16][]byte{}
-	for i := range h16 {
-		h16[i] = server.NewHash()
-		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
-	}
-
-	b.SetBytes(int64(blockSize * 16))
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for j := 0; j < b.N; j++ {
-		for i := range h16 {
-			h16[i].Write(input[i])
-		}
-	}
-}
-
 func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, skipVerification bool, server Server) {
 
 	rand.Seed(time.Now().UnixNano())
