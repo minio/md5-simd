@@ -16,10 +16,10 @@ In order to use `md5-simd`, you must first create an `Md5Server` which can subse
 As an example: 
 ```
     // Create server
-    server := NewMd5Server()
+    server := md5simd.NewServer()
 
     // Create hashing object (conforming to hash.Hash)
-    md5Hash := NewMd5(server)
+    md5Hash := server.NewHash()
     
     // Write one (or more) blocks
     md5Hash.Write(block)

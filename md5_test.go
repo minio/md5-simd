@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
-	"github.com/remeh/sizedwaitgroup"
 	"hash"
 	"math/rand"
 	"runtime"
@@ -17,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/remeh/sizedwaitgroup"
 )
 
 type md5Test struct {
@@ -69,11 +70,11 @@ var golden = []md5Test{
 
 func testGolden16(t *testing.T, megabyte int) {
 
-	server := NewMd5Server()
+	server := NewServer()
 	h16 := [16]hash.Hash{}
 	input := [16][]byte{}
 	for i := range h16 {
-		h16[i] = NewMd5(server)
+		h16[i] = server.NewHash()
 		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, megabyte*1024*1024)
 	}
 
@@ -106,10 +107,10 @@ func TestGolden16(t *testing.T) {
 
 func TestGolangGolden16(t *testing.T) {
 
-	server := NewMd5Server()
+	server := NewServer()
 	h16 := [16]hash.Hash{}
 	for i := range h16 {
-		h16[i] = NewMd5(server)
+		h16[i] = server.NewHash()
 	}
 
 	// Skip first 8, so we even 2 rounds of 16 test vectors
@@ -132,11 +133,11 @@ func TestGolangGolden16(t *testing.T) {
 
 func benchmarkGolden16(b *testing.B, blockSize int) {
 
-	server := NewMd5Server()
+	server := NewServer()
 	h16 := [16]hash.Hash{}
 	input := [16][]byte{}
 	for i := range h16 {
-		h16[i] = NewMd5(server)
+		h16[i] = server.NewHash()
 		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
 	}
 
@@ -151,129 +152,7 @@ func benchmarkGolden16(b *testing.B, blockSize int) {
 	}
 }
 
-func BenchmarkGolden16(b *testing.B) {
-
-	if !hasAVX512 {
-		b.SkipNow()
-	}
-
-	b.Run("32KB", func(b *testing.B) {
-		benchmarkGolden16(b, 32*1024)
-	})
-	b.Run("64KB", func(b *testing.B) {
-		benchmarkGolden16(b, 64*1024)
-	})
-	b.Run("128KB", func(b *testing.B) {
-		benchmarkGolden16(b, 128*1024)
-	})
-	b.Run("256KB", func(b *testing.B) {
-		benchmarkGolden16(b, 256*1024)
-	})
-	b.Run("512KB", func(b *testing.B) {
-		benchmarkGolden16(b, 512*1024)
-	})
-	b.Run("1MB", func(b *testing.B) {
-		benchmarkGolden16(b, 1024*1024)
-	})
-	b.Run("2MB", func(b *testing.B) {
-		benchmarkGolden16(b, 2*1024*1024)
-	})
-}
-
-func benchmarkGoldenAvx2(b *testing.B, blockSize int) {
-
-	server := NewMd5Server()
-	h16 := [16]hash.Hash{}
-	input := [16][]byte{}
-	for i := range h16 {
-		h16[i] = NewMd5(server)
-		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
-	}
-
-	const cores = 2 // AVX2 runs on two cores, so split effective performance in half
-	b.SetBytes(int64(blockSize * 16 / cores))
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for j := 0; j < b.N; j++ {
-		for i := range h16 {
-			h16[i].Write(input[i])
-		}
-	}
-}
-
-func BenchmarkGoldenAvx2(b *testing.B) {
-
-	restore := hasAVX512
-
-	// Make sure AVX512 is disabled
-	hasAVX512 = false
-
-	b.Run("32KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 32*1024)
-	})
-	b.Run("64KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 64*1024)
-	})
-	b.Run("128KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 128*1024)
-	})
-	b.Run("256KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 256*1024)
-	})
-	b.Run("512KB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 512*1024)
-	})
-	b.Run("1MB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 1024*1024)
-	})
-	b.Run("2MB", func(b *testing.B) {
-		benchmarkGoldenAvx2(b, 2*1024*1024)
-	})
-
-	hasAVX512 = restore
-}
-
-func benchmarkCryptoMd5(b *testing.B, blockSize int) {
-
-	input := bytes.Repeat([]byte{0x61}, blockSize)
-
-	b.SetBytes(int64(blockSize))
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	h := md5.New()
-
-	for j := 0; j < b.N; j++ {
-		h.Write(input)
-	}
-}
-
-func BenchmarkCryptoMd5(b *testing.B) {
-	b.Run("32KB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 32*1024)
-	})
-	b.Run("64KB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 64*1024)
-	})
-	b.Run("128KB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 128*1024)
-	})
-	b.Run("256KB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 256*1024)
-	})
-	b.Run("512KB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 512*1024)
-	})
-	b.Run("1MB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 1024*1024)
-	})
-	b.Run("2MB", func(b *testing.B) {
-		benchmarkCryptoMd5(b, 2*1024*1024)
-	})
-}
-
-func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, skipVerification bool, server *Md5Server) {
+func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, skipVerification bool, server Server) {
 
 	rand.Seed(time.Now().UnixNano())
 	verifier := make(map[string]string)
@@ -285,7 +164,7 @@ func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, 
 		swg.Add()
 		go func(i int) {
 			defer swg.Done()
-			h := NewMd5(server)
+			h := server.NewHash()
 			mbs := 10 + rand.Intn(sizeVariation)
 			h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, mbs*1024*1024))
 			digest := fmt.Sprintf("%x", h.Sum([]byte{}))
@@ -328,14 +207,101 @@ func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, 
 }
 
 func TestMd5Simulator(t *testing.T) {
-
+	iterations := 50
 	if testing.Short() {
-		t.SkipNow()
+		iterations = 2
 	}
 
-	server := NewMd5Server()
+	server := NewServer()
 
 	t.Run("", func(t *testing.T) {
-		testMd5Simulator(t, 16, 1000, 100, false, server)
+		testMd5Simulator(t, 16, iterations, 100, false, server)
+	})
+}
+
+func benchmarkCryptoMd5(b *testing.B, blockSize int) {
+
+	input := bytes.Repeat([]byte{0x61}, blockSize)
+
+	b.SetBytes(int64(blockSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	h := md5.New()
+	var tmp [Size]byte
+
+	for j := 0; j < b.N; j++ {
+		h.Write(input)
+		h.Sum(tmp[:0])
+	}
+}
+
+func benchmarkCryptoMd5P(b *testing.B, blockSize int) {
+	b.SetBytes(int64(blockSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+	var tmp [Size]byte
+
+	b.RunParallel(func(pb *testing.PB) {
+		input := bytes.Repeat([]byte{0x61}, blockSize)
+		h := md5.New()
+		for pb.Next() {
+			h.Write(input)
+			h.Sum(tmp[:0])
+		}
+	})
+}
+
+func BenchmarkCryptoMd5(b *testing.B) {
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkCryptoMd5(b, 2*1024*1024)
+	})
+}
+
+func BenchmarkCryptoMd5Parallel(b *testing.B) {
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 2*1024*1024)
+	})
+	b.Run("4MB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 4*1024*1024)
+	})
+	b.Run("8MB", func(b *testing.B) {
+		benchmarkCryptoMd5P(b, 8*1024*1024)
 	})
 }

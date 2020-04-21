@@ -1,4 +1,6 @@
-// Copyright (c) 2020 MinIO Inc. All rights reserved.
+//+build !noasm,!appengine,gc
+
+//Copyright (c) 2020 MinIO Inc. All rights reserved.
 // Use of this source code is governed by a license that can be
 // found in the LICENSE file.
 
@@ -11,9 +13,11 @@ import (
 	"strings"
 	"testing"
 	"unsafe"
+
+	"github.com/klauspost/cpuid"
 )
 
-func Reverse(s string) string {
+func reverse(s string) string {
 	runes := []rune(s)
 	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
 		runes[i], runes[j] = runes[j], runes[i]
@@ -36,7 +40,7 @@ func block16Inputs() (input [16][]byte) {
 	}
 	// fill upper 8 test vectors with the reverse strings of lower
 	for ; i < len(input); i++ {
-		input[i] = []byte(Reverse(string(input[i-8])))
+		input[i] = []byte(reverse(string(input[i-8])))
 	}
 
 	return
@@ -165,8 +169,7 @@ func TestBlock16Masked(t *testing.T) {
 }
 
 func BenchmarkBlock8(b *testing.B) {
-
-	if !hasAVX2 {
+	if !cpuid.CPU.AVX2() {
 		b.SkipNow()
 	}
 

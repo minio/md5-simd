@@ -1,4 +1,4 @@
-// +build amd64
+//+build !noasm,!appengine,gc
 
 // Copyright (c) 2020 MinIO Inc. All rights reserved.
 // Use of this source code is governed by a license that can be
@@ -8,15 +8,14 @@ package md5simd
 
 import (
 	"fmt"
-	"github.com/klauspost/cpuid"
-	"hash"
 	"math/bits"
 	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/klauspost/cpuid"
 )
 
-var hasAVX2 bool
 var hasAVX512 bool
 
 //go:noescape
@@ -25,10 +24,10 @@ func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 //go:noescape
 func block16(state *uint32, ptrs *int64, mask uint64, n int)
 
-// NewMd5 - initialize instance for Md5 implementation.
-func NewMd5(md5srv *Md5Server) hash.Hash {
-	uid := atomic.AddUint64(&uidCounter, 1)
-	return &Md5Digest{uid: uid, md5srv: md5srv}
+// NewHash - initialize instance for Md5 implementation.
+func (s *md5Server) NewHash() Hasher {
+	uid := atomic.AddUint64(&s.uidCounter, 1)
+	return &md5Digest{uid: uid, md5srv: s}
 }
 
 // 8-way 4x uint32 digests in 4 ymm registers
@@ -91,7 +90,6 @@ var avx512md5consts = func(c []uint32) []uint32 {
 }(md5consts[:])
 
 func init() {
-	hasAVX2 = cpuid.CPU.AVX2()
 	hasAVX512 = cpuid.CPU.AVX512F()
 }
 
@@ -188,9 +186,10 @@ func blockMd5_avx2(s *digest8, input [8][]byte, base []byte) {
 		var cache cache8 // stack storage for block8 tmp state
 		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
 
-		atomic.AddUint64(&used_8, uint64(bits.OnesCount(uint(m.mask)))*64*m.rounds)
-		atomic.AddUint64(&unused_8, (8-uint64(bits.OnesCount(uint(m.mask))))*64*m.rounds)
-		atomic.AddUint64(&capacity_8, 8*64*m.rounds)
+		// FIXME(fwessels): We have some global state here.
+		atomic.AddUint64(&used8, uint64(bits.OnesCount(uint(m.mask)))*64*m.rounds)
+		atomic.AddUint64(&unused8, (8-uint64(bits.OnesCount(uint(m.mask))))*64*m.rounds)
+		atomic.AddUint64(&capacity8, 8*64*m.rounds)
 
 		for j := 0; j < len(bufs); j++ {
 			bufs[j] += int32(64 * m.rounds) // update pointers for next round
