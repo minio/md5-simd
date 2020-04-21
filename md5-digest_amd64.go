@@ -1,3 +1,5 @@
+//+build !noasm,!appengine,gc
+
 // Copyright (c) 2020 MinIO Inc. All rights reserved.
 // Use of this source code is governed by a license that can be
 // found in the LICENSE file.
@@ -10,10 +12,10 @@ import (
 	"time"
 )
 
-// Md5Digest - Type for computing MD5 using either AVX2 or AVX512
-type Md5Digest struct {
+// md5Digest - Type for computing MD5 using either AVX2 or AVX512
+type md5Digest struct {
 	uid    uint64
-	md5srv *Md5Server
+	md5srv *md5Server
 	x      [BlockSize]byte
 	nx     int
 	len    uint64
@@ -22,21 +24,21 @@ type Md5Digest struct {
 }
 
 // Size - Return size of checksum
-func (d *Md5Digest) Size() int { return Size }
+func (d *md5Digest) Size() int { return Size }
 
 // BlockSize - Return blocksize of checksum
-func (d Md5Digest) BlockSize() int { return BlockSize }
+func (d md5Digest) BlockSize() int { return BlockSize }
 
 // Reset - reset digest to its initial values
-func (d *Md5Digest) Reset() {
+func (d *md5Digest) Reset() {
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, reset: true}
 	d.nx = 0
 	d.len = 0
 	d.final = false
 }
 
-// Write to digest
-func (d *Md5Digest) Write(p []byte) (nn int, err error) {
+// write to digest
+func (d *md5Digest) Write(p []byte) (nn int, err error) {
 	// break input into chunks of maximum MaxBlockSize size
 	for {
 		l := len(p)
@@ -54,15 +56,15 @@ func (d *Md5Digest) Write(p []byte) (nn int, err error) {
 			break
 		}
 
-		time.Sleep(WriteSleepMs * time.Millisecond)
+		time.Sleep(writeSleepMs * time.Millisecond)
 	}
 	return
 }
 
-func (d *Md5Digest) write(p []byte) (nn int, err error) {
+func (d *md5Digest) write(p []byte) (nn int, err error) {
 
 	if d.final {
-		return 0, errors.New("Md5Digest already finalized. Reset first before writing again")
+		return 0, errors.New("md5Digest already finalized. Reset first before writing again")
 	}
 
 	nn = len(p)
@@ -87,8 +89,16 @@ func (d *Md5Digest) write(p []byte) (nn int, err error) {
 	return
 }
 
+func (d *md5Digest) Close() {
+	if !d.final {
+		delete(d.md5srv.digests, d.uid)
+		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: nil, final: true, sumCh: nil}
+		d.final = true
+	}
+}
+
 // Sum - Return MD5 sum in bytes
-func (d *Md5Digest) Sum(in []byte) (result []byte) {
+func (d *md5Digest) Sum(in []byte) (result []byte) {
 
 	if d.final {
 		return append(in, d.result[:]...)

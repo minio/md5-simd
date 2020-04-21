@@ -27,7 +27,7 @@ func generateMaskAndRounds8(input [8][]byte) (mr []maskRounds) {
 	for c, inpt := range input {
 		sorted[c] = lane{uint(len(inpt)), uint(c)}
 	}
-	sort.Slice(sorted[:], func(i, j int) bool { return sorted[i].len < sorted[j].len } )
+	sort.Slice(sorted[:], func(i, j int) bool { return sorted[i].len < sorted[j].len })
 
 	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
 	m, round := uint64(0xff), uint64(0)
@@ -52,7 +52,7 @@ func generateMaskAndRounds16(input [16][]byte) (mr []maskRounds) {
 	for c, inpt := range input {
 		sorted[c] = lane{uint(len(inpt)), uint(c)}
 	}
-	sort.Slice(sorted[:], func(i, j int) bool { return sorted[i].len < sorted[j].len } )
+	sort.Slice(sorted[:], func(i, j int) bool { return sorted[i].len < sorted[j].len })
 
 	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
 	m, round := uint64(0xffff), uint64(0)
