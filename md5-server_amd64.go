@@ -92,6 +92,34 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 			// including most probably previous block for same hash
 			s.blocks()
 		}
+
+		// Intercept final messages that are small and process synchronously
+		if block.final && len(block.msg) <= 128 {
+
+			var dig digest
+			d, ok := s.digests[block.uid]
+			if ok {
+				dig.s[0] = binary.LittleEndian.Uint32(d[0:4])
+				dig.s[1] = binary.LittleEndian.Uint32(d[4:8])
+				dig.s[2] = binary.LittleEndian.Uint32(d[8:12])
+				dig.s[3] = binary.LittleEndian.Uint32(d[12:16])
+			} else {
+				dig.s[0], dig.s[1], dig.s[2], dig.s[3] = init0, init1, init2, init3
+			}
+
+			blockGeneric(&dig, block.msg)
+
+			sum := [Size]byte{}
+			binary.LittleEndian.PutUint32(sum[0:], dig.s[0])
+			binary.LittleEndian.PutUint32(sum[4:], dig.s[1])
+			binary.LittleEndian.PutUint32(sum[8:], dig.s[2])
+			binary.LittleEndian.PutUint32(sum[12:], dig.s[3])
+
+			block.sumCh <- sum
+			delete(s.digests, block.uid) // Delete entry from hashmap
+			return
+		}
+
 		s.totalIn++
 		s.lanes[index] = md5LaneInfo{uid: block.uid, block: block.msg}
 		if block.final {
