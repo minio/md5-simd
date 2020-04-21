@@ -29,11 +29,6 @@ const (
 // differentiate with default initialisation value of 0
 const md5ServerUID = 16
 
-// FIXME(fwessels): This global state cannot work.
-var used8 = uint64(0)
-var unused8 = uint64(0)
-var capacity8 = uint64(0)
-
 // Message to send across input channel
 type blockInput struct {
 	uid   uint64
@@ -50,7 +45,7 @@ type md5LaneInfo struct {
 	outputCh chan [Size]byte // channel for output result
 }
 
-// fallbackServer - Type to implement parallel handling of MD5 invocations
+// md5Server - Type to implement parallel handling of MD5 invocations
 type md5Server struct {
 	uidCounter uint64
 	blocksCh   chan blockInput       // Input channel

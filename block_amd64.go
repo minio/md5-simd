@@ -8,7 +8,6 @@ package md5simd
 
 import (
 	"fmt"
-	"math/bits"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -185,11 +184,6 @@ func blockMd5_avx2(s *digest8, input [8][]byte, base []byte) {
 	for _, m := range maskRounds {
 		var cache cache8 // stack storage for block8 tmp state
 		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
-
-		// FIXME(fwessels): We have some global state here.
-		atomic.AddUint64(&used8, uint64(bits.OnesCount(uint(m.mask)))*64*m.rounds)
-		atomic.AddUint64(&unused8, (8-uint64(bits.OnesCount(uint(m.mask))))*64*m.rounds)
-		atomic.AddUint64(&capacity8, 8*64*m.rounds)
 
 		for j := 0; j < len(bufs); j++ {
 			bufs[j] += int32(64 * m.rounds) // update pointers for next round
