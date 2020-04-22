@@ -19,7 +19,7 @@ type md5Digest struct {
 	x      [BlockSize]byte
 	nx     int
 	len    uint64
-	final  bool
+	closed bool
 	result [Size]byte
 }
 
@@ -34,11 +34,16 @@ func (d *md5Digest) Reset() {
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, reset: true}
 	d.nx = 0
 	d.len = 0
-	d.final = false
+	d.closed = false
 }
 
 // write to digest
 func (d *md5Digest) Write(p []byte) (nn int, err error) {
+
+	if d.closed {
+		return 0, errors.New("md5Digest already closed. Reset first before writing again")
+	}
+
 	// break input into chunks of maximum MaxBlockSize size
 	for {
 		l := len(p)
@@ -63,10 +68,6 @@ func (d *md5Digest) Write(p []byte) (nn int, err error) {
 
 func (d *md5Digest) write(p []byte) (nn int, err error) {
 
-	if d.final {
-		return 0, errors.New("md5Digest already finalized. Reset first before writing again")
-	}
-
 	nn = len(p)
 	d.len += uint64(nn)
 	if d.nx > 0 {
@@ -90,17 +91,17 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 }
 
 func (d *md5Digest) Close() {
-	if !d.final {
+	if !d.closed {
 		delete(d.md5srv.digests, d.uid)
 		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: nil, final: true, sumCh: nil}
-		d.final = true
+		d.closed = true
 	}
 }
 
 // Sum - Return MD5 sum in bytes
 func (d *md5Digest) Sum(in []byte) (result []byte) {
 
-	if d.final {
+	if d.closed {
 		return append(in, d.result[:]...)
 	}
 
@@ -126,6 +127,5 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 	sumCh := make(chan [Size]byte)
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, final: true, sumCh: sumCh}
 	d.result = <-sumCh
-	d.final = true
 	return append(in, d.result[:]...)
 }

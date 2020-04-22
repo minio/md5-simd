@@ -131,6 +131,33 @@ func TestGolangGolden16(t *testing.T) {
 	}
 }
 
+func TestMultipleSums(t *testing.T) {
+
+	server := NewServer()
+	h := server.NewHash()
+	var tmp [Size]byte
+
+	h.Write(bytes.Repeat([]byte{0x61}, 64))
+	digestMiddle := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	h.Write(bytes.Repeat([]byte{0x62}, 64))
+	digestFinal := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+
+	h2 := md5.New()
+	h2.Write(bytes.Repeat([]byte{0x61}, 64))
+	digestCryptoMiddle := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
+
+	if digestMiddle != digestCryptoMiddle {
+		t.Errorf("TestMultipleSums<Middle>, got %s, want %s", digestMiddle, digestCryptoMiddle)
+	}
+
+	h2.Write(bytes.Repeat([]byte{0x62}, 64))
+	digestCryptoFinal := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
+
+	if digestFinal != digestCryptoFinal {
+		t.Errorf("TestMultipleSums<Final>, got %s, want %s", digestFinal, digestCryptoFinal)
+	}
+}
+
 func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, skipVerification bool, server Server) {
 
 	rand.Seed(time.Now().UnixNano())

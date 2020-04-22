@@ -116,7 +116,6 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 			binary.LittleEndian.PutUint32(sum[12:], dig.s[3])
 
 			block.sumCh <- sum
-			delete(s.digests, block.uid) // Delete entry from hashmap
 			return
 		}
 
@@ -206,14 +205,13 @@ func (s *md5Server) blocks() {
 		binary.LittleEndian.PutUint32(digest[4:], state.v1[i])
 		binary.LittleEndian.PutUint32(digest[8:], state.v2[i])
 		binary.LittleEndian.PutUint32(digest[12:], state.v3[i])
-		s.digests[uid] = digest
-		s.lanes[i] = md5LaneInfo{}
 
-		if outputCh != nil {
-			// Send back result
-			outputCh <- digest
-			delete(s.digests, uid) // Delete entry from hashmap
+		if outputCh == nil {
+			s.digests[uid] = digest // save updated digest for next iteration
+		} else {
+			outputCh <- digest // send back result of padded trailer (and keep previous state for subsequent writes)
 		}
+		s.lanes[i] = md5LaneInfo{}
 	}
 }
 
