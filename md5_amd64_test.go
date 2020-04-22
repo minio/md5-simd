@@ -29,10 +29,19 @@ func benchmarkAvx512(b *testing.B, blockSize int) {
 	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
+	var tmp [Size]byte
 
 	for j := 0; j < b.N; j++ {
 		for i := range h16 {
 			h16[i].Write(input[i])
+		}
+		if benchmarkWithSum {
+			for i := range h16 {
+				_ = h16[i].Sum(tmp[:0])
+				// FIXME(fwessels): Broken, since Sum closes the stream.
+				// Once fixed this can be removed.
+				h16[i].Reset()
+			}
 		}
 	}
 }
@@ -63,6 +72,64 @@ func BenchmarkAvx512(b *testing.B) {
 	})
 	b.Run("2MB", func(b *testing.B) {
 		benchmarkAvx512(b, 2*1024*1024)
+	})
+}
+
+func benchmarkAvx512P(b *testing.B, blockSize int) {
+	b.SetBytes(int64(blockSize * 16))
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		input := bytes.Repeat([]byte{0x61}, blockSize)
+		server := NewServer()
+		defer server.Close()
+		h16 := [16]hash.Hash{}
+		for i := range h16 {
+			h16[i] = server.NewHash()
+		}
+		var tmp [Size]byte
+		for pb.Next() {
+			for i := range h16 {
+				h16[i].Write(input)
+			}
+			if benchmarkWithSum {
+				for i := range h16 {
+					_ = h16[i].Sum(tmp[:0])
+					// FIXME(fwessels): Broken, since Sum closes the stream.
+					// Once fixed this can be removed.
+					h16[i].Reset()
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkAvx512Parallel(b *testing.B) {
+
+	if !hasAVX512 {
+		b.SkipNow()
+	}
+
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkAvx512P(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkAvx512P(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkAvx512P(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkAvx512P(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkAvx512P(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkAvx512P(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkAvx512P(b, 2*1024*1024)
 	})
 }
 
