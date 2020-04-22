@@ -133,6 +133,8 @@ func TestGolangGolden16(t *testing.T) {
 
 func TestMultipleSums(t *testing.T) {
 
+	t.Skip()
+
 	server := NewServer()
 	h := server.NewHash()
 	var tmp [Size]byte

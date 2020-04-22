@@ -42,7 +42,6 @@ type blockInput struct {
 type md5LaneInfo struct {
 	uid      uint64          // unique identification for this MD5 processing
 	block    []byte          // input block to be processed
-	outputCh chan [Size]byte // channel for output result
 }
 
 // md5Server - Type to implement parallel handling of MD5 invocations
@@ -116,14 +115,12 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 			binary.LittleEndian.PutUint32(sum[12:], dig.s[3])
 
 			block.sumCh <- sum
+			delete(s.digests, block.uid) // Delete entry from hashmap
 			return
 		}
 
 		s.totalIn++
 		s.lanes[index] = md5LaneInfo{uid: block.uid, block: block.msg}
-		if block.final {
-			s.lanes[index].outputCh = block.sumCh
-		}
 		if s.totalIn == len(s.lanes) {
 			// if all lanes are filled, process all lanes
 			s.blocks()
@@ -199,18 +196,14 @@ func (s *md5Server) blocks() {
 
 	s.totalIn = 0
 	for i := 0; i < len(s.lanes); i++ {
-		uid, outputCh := s.lanes[i].uid, s.lanes[i].outputCh
+		uid := s.lanes[i].uid
 		digest := [Size]byte{}
 		binary.LittleEndian.PutUint32(digest[0:], state.v0[i])
 		binary.LittleEndian.PutUint32(digest[4:], state.v1[i])
 		binary.LittleEndian.PutUint32(digest[8:], state.v2[i])
 		binary.LittleEndian.PutUint32(digest[12:], state.v3[i])
 
-		if outputCh == nil {
-			s.digests[uid] = digest // save updated digest for next iteration
-		} else {
-			outputCh <- digest // send back result of padded trailer (and keep previous state for subsequent writes)
-		}
+		s.digests[uid] = digest
 		s.lanes[i] = md5LaneInfo{}
 	}
 }
