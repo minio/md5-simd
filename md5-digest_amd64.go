@@ -93,7 +93,7 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 func (d *md5Digest) Close() {
 	if !d.closed {
 		delete(d.md5srv.digests, d.uid)
-		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: nil, final: true, sumCh: nil}
+		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: nil}
 		d.closed = true
 	}
 }
@@ -125,7 +125,7 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 	trail = append(trail, tmp[0:8]...)
 
 	sumCh := make(chan [Size]byte)
-	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, final: true, sumCh: sumCh}
+	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, sumCh: sumCh}
 	d.result = <-sumCh
 	return append(in, d.result[:]...)
 }

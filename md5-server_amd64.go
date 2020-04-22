@@ -34,14 +34,13 @@ type blockInput struct {
 	uid   uint64
 	msg   []byte
 	reset bool
-	final bool
 	sumCh chan [Size]byte
 }
 
 // md5LaneInfo - Info for each lane
 type md5LaneInfo struct {
-	uid      uint64          // unique identification for this MD5 processing
-	block    []byte          // input block to be processed
+	uid   uint64 // unique identification for this MD5 processing
+	block []byte // input block to be processed
 }
 
 // md5Server - Type to implement parallel handling of MD5 invocations
@@ -93,7 +92,7 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 		}
 
 		// Intercept final messages that are small and process synchronously
-		if block.final && len(block.msg) <= 128 {
+		if block.sumCh != nil {
 
 			var dig digest
 			d, ok := s.digests[block.uid]
