@@ -255,4 +255,5 @@ loop:
 	VMOVUPD c, 64(dig)
 	VMOVUPD d, 96(dig)
 
+	VZEROUPPER
 	RET
