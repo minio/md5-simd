@@ -12,9 +12,6 @@
 	VALIGND    $8, memHigh, memHigh, memHigh             \
 	VPORD      memHigh, mem, mem
 
-#define roll(shift, a) \
-	VPROLD $shift, a, a
-
 #define ROUND1(a, b, c, d, index, const, shift) \
 	VXORPS  c, tmp, tmp            \
 	VPADDD  64*const(consts), a, a \
@@ -22,7 +19,7 @@
 	VPTERNLOGD $0x6C, b, d, tmp    \
 	prep(index)                    \
 	VPADDD  tmp, a, a              \
-	roll(shift,a)                  \
+	VPROLD $shift, a, a            \
 	VMOVAPD c, tmp                 \
 	VPADDD  b, a, a
 
@@ -32,7 +29,7 @@
 	VPADDD  mem, a, a              \
 	VPTERNLOGD $0x6C, b, d, tmp    \
 	VPADDD  tmp, a, a              \
-	roll(shift,a)                  \
+	VPROLD $shift, a, a            \
 	VMOVAPD c, tmp                 \
 	VPADDD  b, a, a
 
@@ -44,7 +41,7 @@
 	VMOVAPD c, tmp                 \
 	VPADDD  tmp2, a, a             \
 	VMOVAPD c, tmp2                \
-	roll(shift,a)                  \
+	VPROLD $shift, a, a            \
 	VPADDD  b, a, a
 
 #define ROUND3(a, b, c, d, zreg, const, shift) \
@@ -52,7 +49,7 @@
 	VPADDD  zreg, a, a             \
 	VPTERNLOGD $0x96, b, d, tmp    \
 	VPADDD  tmp, a, a              \
-	roll(shift,a)                  \
+	VPROLD $shift, a, a            \
 	VMOVAPD b, tmp                 \
 	VPADDD  b, a, a
 
@@ -61,7 +58,7 @@
 	VPADDD zreg, a, a             \
 	VPTERNLOGD $0x36, b, c, tmp   \
 	VPADDD tmp, a, a              \
-	roll(shift,a)                 \
+	VPROLD $shift, a, a           \
 	VXORPS c, ones, tmp           \
 	VPADDD b, a, a
 
@@ -89,7 +86,6 @@ TEXT ·block16(SB),4,$0-32
 #define ptrsLow  Z10
 #define ptrsHigh Z11
 #define ones     Z12
-#define rtmp1    Z13
 #define mem      Z15
 #define ymemLow  Y15
 #define memHigh  Z14
