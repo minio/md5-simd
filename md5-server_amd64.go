@@ -35,7 +35,12 @@ type blockInput struct {
 	msg   []byte
 	reset bool
 	init  bool
-	sumCh chan [Size*2]byte
+	sumCh chan sumResult
+}
+
+type sumResult struct {
+	digest [Size]byte
+	state  [Size]byte
 }
 
 // md5LaneInfo - Info for each lane
@@ -85,6 +90,7 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 			s.init(block.uid, block.msg)
 			return
 		}
+
 		// Get slot
 		index := block.uid % uint64(len(s.lanes))
 
@@ -108,18 +114,18 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 				dig.s[0], dig.s[1], dig.s[2], dig.s[3] = init0, init1, init2, init3
 			}
 
-			sum := [Size*2]byte{}
-			binary.LittleEndian.PutUint32(sum[16:], dig.s[0])
-			binary.LittleEndian.PutUint32(sum[20:], dig.s[1])
-			binary.LittleEndian.PutUint32(sum[24:], dig.s[2])
-			binary.LittleEndian.PutUint32(sum[28:], dig.s[3])
+			sum := sumResult{}
+			binary.LittleEndian.PutUint32(sum.state[0:], dig.s[0])
+			binary.LittleEndian.PutUint32(sum.state[4:], dig.s[1])
+			binary.LittleEndian.PutUint32(sum.state[8:], dig.s[2])
+			binary.LittleEndian.PutUint32(sum.state[12:], dig.s[3])
 
 			blockGeneric(&dig, block.msg)
 
-			binary.LittleEndian.PutUint32(sum[0:], dig.s[0])
-			binary.LittleEndian.PutUint32(sum[4:], dig.s[1])
-			binary.LittleEndian.PutUint32(sum[8:], dig.s[2])
-			binary.LittleEndian.PutUint32(sum[12:], dig.s[3])
+			binary.LittleEndian.PutUint32(sum.digest[0:], dig.s[0])
+			binary.LittleEndian.PutUint32(sum.digest[4:], dig.s[1])
+			binary.LittleEndian.PutUint32(sum.digest[8:], dig.s[2])
+			binary.LittleEndian.PutUint32(sum.digest[12:], dig.s[3])
 
 			block.sumCh <- sum
 

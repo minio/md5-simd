@@ -142,14 +142,14 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 	binary.LittleEndian.PutUint64(tmp[:], len) // append length in bits
 	trail = append(trail, tmp[0:8]...)
 
-	sumCh := make(chan [Size*2]byte)
+	sumCh := make(chan sumResult)
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, sumCh: sumCh}
 	sum := <-sumCh
-	copy(d.result[:], sum[:Size])
+	copy(d.result[:], sum.digest[:])
 
 	// For when continuing to write, save intermediate state, so that
 	// we can re-initialize with this, before sending out the next block to hash
-	copy(d.initState[:], sum[Size:Size*2])
+	copy(d.initState[:], sum.state[:])
 	d.needsInit = true
 	d.uid = d.md5srv.updateUid()
 
