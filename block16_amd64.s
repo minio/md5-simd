@@ -21,8 +21,7 @@
 	VXORPS  c, tmp, tmp            \
 	VPADDD  64*const(consts), a, a \
 	VPADDD  mem, a, a              \
-	VANDPS  b, tmp, tmp            \
-	VXORPS  d, tmp, tmp            \
+	VPTERNLOG $120, d, b, tmp      \
 	prep(index)                    \
 	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
@@ -33,8 +32,7 @@
 	VXORPS  c, tmp, tmp            \
 	VPADDD  64*const(consts), a, a \
 	VPADDD  mem, a, a              \
-	VANDPS  b, tmp, tmp            \
-	VXORPS  d, tmp, tmp            \
+	VPTERNLOG $120, d, b, tmp      \
 	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
 	VMOVAPD c, tmp                 \
@@ -55,8 +53,7 @@
 #define ROUND3(a, b, c, d, zreg, const, shift) \
 	VPADDD  64*const(consts), a, a \
 	VPADDD  zreg, a, a             \
-	VXORPS  d, tmp, tmp            \
-	VXORPS  b, tmp, tmp            \
+	VPTERNLOG $150, b, d, tmp      \
 	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
 	VMOVAPD b, tmp                 \
@@ -65,8 +62,7 @@
 #define ROUND4(a, b, c, d, zreg, const, shift) \
 	VPADDD 64*const(consts), a, a \
 	VPADDD zreg, a, a             \
-	VORPS  b, tmp, tmp            \
-	VXORPS c, tmp, tmp            \
+	VPTERNLOG $30, c, b, tmp      \
 	VPADDD tmp, a, a              \
 	roll(shift,a)                 \
 	VXORPS c, ones, tmp           \
