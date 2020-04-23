@@ -105,7 +105,7 @@ The benchmark below shows the (single thread) maximum performance of the `block(
 
 ```
 BenchmarkBlock8-4        9695575               124 ns/op        4144.80 MB/s           0 B/op          0 allocs/op
-BenchmarkBlock16-4       7173894               167 ns/op        6122.07 MB/s           0 B/op          0 allocs/op
+BenchmarkBlock16-4       9580390               124 ns/op        8228.88 MB/s           0 B/op          0 allocs/op
 ```
 
 ## Limitations
