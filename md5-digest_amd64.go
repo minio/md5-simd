@@ -31,13 +31,20 @@ func (d *md5Digest) Size() int { return Size }
 // BlockSize - Return blocksize of checksum
 func (d md5Digest) BlockSize() int { return BlockSize }
 
-// Reset - reset digest to its initial values
 func (d *md5Digest) Reset() {
+	if !d.closed {
+		d.reset()
+	}
+}
+
+// reset - reset digest to its initial values
+func (d *md5Digest) reset() {
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, reset: true}
 	d.nx = 0
 	d.len = 0
 	d.closed = false
 	d.needsInit = false
+	d.uid = d.md5srv.updateUid() // Make sure new writes (if any) occur with new uid (and thus new lane)
 }
 
 // write to digest
@@ -103,8 +110,8 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 
 func (d *md5Digest) Close() {
 	if !d.closed {
-		delete(d.md5srv.digests, d.uid)
-		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: nil}
+		// Reset the state on the server side before closing this hash
+		d.reset()
 		d.closed = true
 	}
 }
