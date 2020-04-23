@@ -29,6 +29,11 @@ func (s *md5Server) NewHash() Hasher {
 	return &md5Digest{uid: uid, md5srv: s}
 }
 
+func (s *md5Server) updateUid() (uid uint64) {
+	uid = atomic.AddUint64(&s.uidCounter, 1)
+	return
+}
+
 // 8-way 4x uint32 digests in 4 ymm registers
 // (ymm0, ymm1, ymm2, ymm3)
 type digest8 struct {

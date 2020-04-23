@@ -14,13 +14,15 @@ import (
 
 // md5Digest - Type for computing MD5 using either AVX2 or AVX512
 type md5Digest struct {
-	uid    uint64
-	md5srv *md5Server
-	x      [BlockSize]byte
-	nx     int
-	len    uint64
-	closed bool
-	result [Size]byte
+	uid       uint64
+	md5srv    *md5Server
+	x         [BlockSize]byte
+	nx        int
+	len       uint64
+	closed    bool
+	result    [Size]byte
+	needsInit bool
+	initState [Size]byte
 }
 
 // Size - Return size of checksum
@@ -35,6 +37,7 @@ func (d *md5Digest) Reset() {
 	d.nx = 0
 	d.len = 0
 	d.closed = false
+	d.needsInit = false
 }
 
 // write to digest
@@ -68,20 +71,28 @@ func (d *md5Digest) Write(p []byte) (nn int, err error) {
 
 func (d *md5Digest) write(p []byte) (nn int, err error) {
 
+	dispatch := func(bi blockInput) {
+		if d.needsInit {
+			d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: d.initState[:], init: true}
+			d.needsInit = false
+		}
+		d.md5srv.blocksCh <- bi
+	}
+
 	nn = len(p)
 	d.len += uint64(nn)
 	if d.nx > 0 {
 		n := copy(d.x[d.nx:], p)
 		d.nx += n
 		if d.nx == BlockSize {
-			d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: d.x[:]}
+			dispatch(blockInput{uid: d.uid, msg: d.x[:]})
 			d.nx = 0
 		}
 		p = p[n:]
 	}
 	if len(p) >= BlockSize {
 		n := len(p) &^ (BlockSize - 1)
-		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: p[:n]}
+		dispatch(blockInput{uid: d.uid, msg: p[:n]})
 		p = p[n:]
 	}
 	if len(p) > 0 {
@@ -124,8 +135,16 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 	binary.LittleEndian.PutUint64(tmp[:], len) // append length in bits
 	trail = append(trail, tmp[0:8]...)
 
-	sumCh := make(chan [Size]byte)
+	sumCh := make(chan [Size*2]byte)
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, sumCh: sumCh}
-	d.result = <-sumCh
+	sum := <-sumCh
+	copy(d.result[:], sum[:Size])
+
+	// For when continuing to write, save intermediate state, so that
+	// we can re-initialize with this, before sending out the next block to hash
+	copy(d.initState[:], sum[Size:Size*2])
+	d.needsInit = true
+	d.uid = d.md5srv.updateUid()
+
 	return append(in, d.result[:]...)
 }

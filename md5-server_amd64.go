@@ -34,7 +34,8 @@ type blockInput struct {
 	uid   uint64
 	msg   []byte
 	reset bool
-	sumCh chan [Size]byte
+	init  bool
+	sumCh chan [Size*2]byte
 }
 
 // md5LaneInfo - Info for each lane
@@ -80,8 +81,10 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 		if block.reset {
 			s.reset(block.uid)
 			return
+		} else if block.init {
+			s.init(block.uid, block.msg)
+			return
 		}
-
 		// Get slot
 		index := block.uid % uint64(len(s.lanes))
 
@@ -91,8 +94,8 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 			s.blocks()
 		}
 
-		// Intercept final messages that are small and process synchronously
-		if block.sumCh != nil {
+		// Intercept sum messages (small by definition), so process synchronously
+ 		if block.sumCh != nil {
 
 			var dig digest
 			d, ok := s.digests[block.uid]
@@ -105,16 +108,25 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 				dig.s[0], dig.s[1], dig.s[2], dig.s[3] = init0, init1, init2, init3
 			}
 
+			sum := [Size*2]byte{}
+			binary.LittleEndian.PutUint32(sum[16:], dig.s[0])
+			binary.LittleEndian.PutUint32(sum[20:], dig.s[1])
+			binary.LittleEndian.PutUint32(sum[24:], dig.s[2])
+			binary.LittleEndian.PutUint32(sum[28:], dig.s[3])
+
 			blockGeneric(&dig, block.msg)
 
-			sum := [Size]byte{}
 			binary.LittleEndian.PutUint32(sum[0:], dig.s[0])
 			binary.LittleEndian.PutUint32(sum[4:], dig.s[1])
 			binary.LittleEndian.PutUint32(sum[8:], dig.s[2])
 			binary.LittleEndian.PutUint32(sum[12:], dig.s[3])
 
 			block.sumCh <- sum
-			delete(s.digests, block.uid) // Delete entry from hashmap
+
+			// Reset the info for this hash. If we want to continue
+			// we'll send an init message with the interim state along
+			// with a new uid
+			s.reset(block.uid)
 			return
 		}
 
@@ -172,14 +184,21 @@ func (s *md5Server) reset(uid uint64) {
 	for i, lane := range s.lanes {
 		if lane.uid == uid {
 			if lane.block != nil {
-				s.lanes[i] = md5LaneInfo{} // clear message
 				s.totalIn--
 			}
+			s.lanes[i] = md5LaneInfo{} // clear message
+			break
 		}
 	}
 
 	// Delete entry from hash map
 	delete(s.digests, uid)
+}
+
+func (s *md5Server) init(uid uint64, msg []byte) {
+	digest := [Size]byte{}
+	copy(digest[:], msg[:Size])
+	s.digests[uid] = digest
 }
 
 // Invoke assembly and send results back

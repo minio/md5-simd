@@ -133,26 +133,34 @@ func TestGolangGolden16(t *testing.T) {
 
 func TestMultipleSums(t *testing.T) {
 
-	t.Skip()
 
 	server := NewServer()
 	h := server.NewHash()
 	var tmp [Size]byte
 
 	h.Write(bytes.Repeat([]byte{0x61}, 64))
-	digestMiddle := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	digestMiddle1 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	h.Write(bytes.Repeat([]byte{0x62}, 64))
+	digestMiddle2 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	h.Write(bytes.Repeat([]byte{0x63}, 64))
 	digestFinal := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 
 	h2 := md5.New()
 	h2.Write(bytes.Repeat([]byte{0x61}, 64))
-	digestCryptoMiddle := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
+	digestCryptoMiddle1 := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
 
-	if digestMiddle != digestCryptoMiddle {
-		t.Errorf("TestMultipleSums<Middle>, got %s, want %s", digestMiddle, digestCryptoMiddle)
+	if digestMiddle1 != digestCryptoMiddle1 {
+		t.Errorf("TestMultipleSums<Middle1>, got %s, want %s", digestMiddle1, digestCryptoMiddle1)
 	}
 
 	h2.Write(bytes.Repeat([]byte{0x62}, 64))
+	digestCryptoMiddle2 := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
+
+	if digestMiddle2 != digestCryptoMiddle2 {
+		t.Errorf("TestMultipleSums<Middle2>, got %s, want %s", digestMiddle2, digestCryptoMiddle2)
+	}
+
+	h2.Write(bytes.Repeat([]byte{0x63}, 64))
 	digestCryptoFinal := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
 
 	if digestFinal != digestCryptoFinal {
