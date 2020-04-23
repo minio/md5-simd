@@ -248,4 +248,5 @@ loop:
 	VMOVUPD c, 0x80(dig)
 	VMOVUPD d, 0xc0(dig)
 
+	VZEROUPPER
 	RET
