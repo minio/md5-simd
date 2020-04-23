@@ -13,9 +13,7 @@
 	VPORD      memHigh, mem, mem
 
 #define roll(shift, a) \
-	VPSLLD $shift, a, rtmp1 \
-	VPSRLD $32-shift, a, a  \
-	VORPS  rtmp1, a, a
+	VPROLD $shift, a, a
 
 #define ROUND1(a, b, c, d, index, const, shift) \
 	VXORPS  c, tmp, tmp            \
