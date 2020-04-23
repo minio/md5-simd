@@ -7,17 +7,13 @@ package md5simd
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"hash"
+	"io"
 	"math/rand"
-	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
-	"time"
-
-	"github.com/remeh/sizedwaitgroup"
 )
 
 type md5Test struct {
@@ -133,7 +129,6 @@ func TestGolangGolden16(t *testing.T) {
 
 func TestMultipleSums(t *testing.T) {
 
-
 	server := NewServer()
 	h := server.NewHash()
 	var tmp [Size]byte
@@ -168,70 +163,57 @@ func TestMultipleSums(t *testing.T) {
 	}
 }
 
-func testMd5Simulator(t *testing.T, concurrency, iterations, sizeVariation int, skipVerification bool, server Server) {
+func testMd5Simulator(t *testing.T, concurrency, iterations, maxSize int, server Server) {
 
-	rand.Seed(time.Now().UnixNano())
-	verifier := make(map[string]string)
+	// Use deterministic RNG.
+	rng := rand.New(rand.NewSource(0xabad1dea))
 
-	mu := sync.Mutex{}
+	for i := 0; i < iterations; i++ {
+		var wg sync.WaitGroup
+		wg.Add(concurrency)
+		for j := 0; j < concurrency; j++ {
+			size := 1 + rng.Intn(maxSize)
+			go func(j int) {
+				defer wg.Done()
+				h := server.NewHash()
+				defer h.Close()
+				input := bytes.Repeat([]byte{0x61 + byte(i^j)}, size)
 
-	swg := sizedwaitgroup.New(concurrency)
-	for _i := 0; _i < iterations; _i++ {
-		swg.Add()
-		go func(i int) {
-			defer swg.Done()
-			h := server.NewHash()
-			mbs := 10 + rand.Intn(sizeVariation)
-			h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, mbs*1024*1024))
-			digest := fmt.Sprintf("%x", h.Sum([]byte{}))
-			mu.Lock()
-			verifier[fmt.Sprintf("%d-%d", i, mbs)] = digest
-			mu.Unlock()
-		}(_i)
-	}
-
-	swg.Wait()
-
-	if !skipVerification {
-		fmt.Printf("Verifying %d entries...\n", len(verifier))
-
-		swg = sizedwaitgroup.New(runtime.NumCPU())
-
-		for _input, _digest := range verifier {
-
-			swg.Add()
-			go func(input, digest string) {
-				defer swg.Done()
-
-				p := strings.Split(input, "-")
-				i, _ := strconv.Atoi(p[0])
-				mbs, _ := strconv.Atoi(p[1])
-
-				h := md5.New()
-				h.Write(bytes.Repeat([]byte{0x61 + byte(i)}, mbs*1024*1024))
-				d := fmt.Sprintf("%x", h.Sum([]byte{}))
-
-				if digest != d {
-					t.Errorf("testMd5Simulator[%s], got %s, want %s", input, digest, d)
+				// Copy using odd-sized buffer
+				n, err := io.CopyBuffer(h, bytes.NewBuffer(input), make([]byte, 13773))
+				if int(n) != size || err != nil {
+					panic(fmt.Errorf("wrote %d of %d, err: %v", n, size, err))
 				}
-			}(_input, _digest)
-		}
-		swg.Wait()
+				got := h.Sum([]byte{})
 
-		fmt.Println("Verification OK")
+				// Calculate reference
+				want := md5.Sum(input)
+				if !bytes.Equal(got, want[:]) {
+					panic(fmt.Errorf("got %s, want %s", hex.EncodeToString(got), hex.EncodeToString(want[:])))
+				}
+			}(j)
+		}
+		wg.Wait()
 	}
 }
 
 func TestMd5Simulator(t *testing.T) {
-	iterations := 50
+	iterations := 200
 	if testing.Short() {
-		iterations = 2
+		iterations = 20
 	}
 
 	server := NewServer()
+	defer server.Close()
 
-	t.Run("", func(t *testing.T) {
-		testMd5Simulator(t, 16, iterations, 100, false, server)
+	t.Run("c16", func(t *testing.T) {
+		testMd5Simulator(t, 16, iterations/10, 20<<20, server)
+	})
+	t.Run("c1", func(t *testing.T) {
+		testMd5Simulator(t, 1, iterations, 5<<20, server)
+	})
+	t.Run("c19", func(t *testing.T) {
+		testMd5Simulator(t, 19, iterations*10, 100<<10, server)
 	})
 }
 

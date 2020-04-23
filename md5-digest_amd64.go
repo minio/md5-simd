@@ -103,7 +103,9 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 
 func (d *md5Digest) Close() {
 	if !d.closed {
+		d.md5srv.digestsMu.Lock()
 		delete(d.md5srv.digests, d.uid)
+		d.md5srv.digestsMu.Unlock()
 		d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: nil}
 		d.closed = true
 	}
@@ -135,7 +137,7 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 	binary.LittleEndian.PutUint64(tmp[:], len) // append length in bits
 	trail = append(trail, tmp[0:8]...)
 
-	sumCh := make(chan [Size*2]byte)
+	sumCh := make(chan [Size * 2]byte)
 	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, sumCh: sumCh}
 	sum := <-sumCh
 	copy(d.result[:], sum[:Size])

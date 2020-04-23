@@ -8,6 +8,7 @@ package md5simd
 
 import (
 	"encoding/binary"
+	"sync"
 	"time"
 
 	"github.com/klauspost/cpuid"
@@ -35,7 +36,7 @@ type blockInput struct {
 	msg   []byte
 	reset bool
 	init  bool
-	sumCh chan [Size*2]byte
+	sumCh chan [Size * 2]byte
 }
 
 // md5LaneInfo - Info for each lane
@@ -51,7 +52,8 @@ type md5Server struct {
 	totalIn    int                   // Total number of inputs waiting to be processed
 	lanes      [16]md5LaneInfo       // Array with info per lane
 	digests    map[uint64][Size]byte // Map of uids to (interim) digest results
-	bases      [2][]byte             // base memory (only for non-AVX512 mode)
+	digestsMu  sync.Mutex
+	bases      [2][]byte // base memory (only for non-AVX512 mode)
 }
 
 // NewServer - Create new object for parallel processing handling
@@ -95,10 +97,12 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 		}
 
 		// Intercept sum messages (small by definition), so process synchronously
- 		if block.sumCh != nil {
+		if block.sumCh != nil {
 
 			var dig digest
+			s.digestsMu.Lock()
 			d, ok := s.digests[block.uid]
+			s.digestsMu.Unlock()
 			if ok {
 				dig.s[0] = binary.LittleEndian.Uint32(d[0:4])
 				dig.s[1] = binary.LittleEndian.Uint32(d[4:8])
@@ -108,7 +112,7 @@ func (s *md5Server) process(blocksCh chan blockInput) {
 				dig.s[0], dig.s[1], dig.s[2], dig.s[3] = init0, init1, init2, init3
 			}
 
-			sum := [Size*2]byte{}
+			sum := [Size * 2]byte{}
 			binary.LittleEndian.PutUint32(sum[16:], dig.s[0])
 			binary.LittleEndian.PutUint32(sum[20:], dig.s[1])
 			binary.LittleEndian.PutUint32(sum[24:], dig.s[2])
@@ -192,7 +196,9 @@ func (s *md5Server) reset(uid uint64) {
 	}
 
 	// Delete entry from hash map
+	s.digestsMu.Lock()
 	delete(s.digests, uid)
+	s.digestsMu.Unlock()
 }
 
 func (s *md5Server) init(uid uint64, msg []byte) {
@@ -209,6 +215,7 @@ func (s *md5Server) blocks() {
 		inputs[i] = s.lanes[i].block
 	}
 
+	s.digestsMu.Lock()
 	state := s.getDigests()
 	blockMd5_x16(&state, inputs, s.bases)
 
@@ -224,6 +231,7 @@ func (s *md5Server) blocks() {
 		s.digests[uid] = digest
 		s.lanes[i] = md5LaneInfo{}
 	}
+	s.digestsMu.Unlock()
 }
 
 func (s *md5Server) getDigests() (d digest16) {
