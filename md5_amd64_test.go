@@ -9,6 +9,8 @@ package md5simd
 import (
 	"bytes"
 	"hash"
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/klauspost/cpuid"
@@ -38,8 +40,6 @@ func benchmarkAvx512(b *testing.B, blockSize int) {
 		if benchmarkWithSum {
 			for i := range h16 {
 				_ = h16[i].Sum(tmp[:0])
-				// FIXME(fwessels): Broken, since Sum closes the stream.
-				// Once fixed this can be removed.
 				h16[i].Reset()
 			}
 		}
@@ -142,29 +142,32 @@ func benchmarkAvx2(b *testing.B, blockSize int) {
 		h16[i] = server.NewHash()
 		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
 	}
-
-	const cores = 2 // AVX2 runs on two cores, so split effective performance in half
-	b.SetBytes(int64(blockSize * 16 / cores))
+	// Technically this uses up to 2 cores, but it is the throughput of a single server.
+	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
 	var tmp [Size]byte
 
 	for j := 0; j < b.N; j++ {
+		var wg sync.WaitGroup
+		wg.Add(16)
 		for i := range h16 {
-			h16[i].Write(input[i])
-		}
-		if benchmarkWithSum {
-			for i := range h16 {
-				_ = h16[i].Sum(tmp[:0])
-				// FIXME(fwessels): Broken, since Sum closes the stream.
-				// Once fixed this can be removed.
+			go func(i int) {
+				// write to all concurrently
+				defer wg.Done()
 				h16[i].Reset()
-			}
+				h16[i].Write(input[i])
+				if benchmarkWithSum {
+					_ = h16[i].Sum(tmp[:0])
+				}
+			}(i)
 		}
+		wg.Wait()
 	}
 }
 
 func benchmarkAvx2P(b *testing.B, blockSize int) {
+	// We write input 16x per loop.
 	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -172,46 +175,27 @@ func benchmarkAvx2P(b *testing.B, blockSize int) {
 		input := bytes.Repeat([]byte{0x61}, blockSize)
 		server := NewServer()
 		defer server.Close()
-		h16 := [16]hash.Hash{}
+		var h16 [16]Hasher
 		for i := range h16 {
 			h16[i] = server.NewHash()
+			defer h16[i].Close()
 		}
 		var tmp [Size]byte
 		for pb.Next() {
+			var wg sync.WaitGroup
+			wg.Add(16)
 			for i := range h16 {
-				h16[i].Write(input)
-			}
-			if benchmarkWithSum {
-				for i := range h16 {
-					_ = h16[i].Sum(tmp[:0])
-					// FIXME(fwessels): Broken, since Sum closes the stream.
-					// Once fixed this can be removed.
+				// Write to all concurrently
+				go func(i int) {
+					defer wg.Done()
 					h16[i].Reset()
-				}
+					h16[i].Write(input)
+					if benchmarkWithSum {
+						_ = h16[i].Sum(tmp[:0])
+					}
+				}(i)
 			}
-		}
-	})
-}
-
-// Runs with a single
-func benchmarkAvx2PSingle(b *testing.B, blockSize int) {
-	b.SetBytes(int64(blockSize))
-	b.ReportAllocs()
-	b.ResetTimer()
-	server := NewServer()
-	defer server.Close()
-	b.RunParallel(func(pb *testing.PB) {
-		input := bytes.Repeat([]byte{0x61}, blockSize)
-		hasher := server.NewHash()
-		var tmp [Size]byte
-		for pb.Next() {
-			hasher.Write(input)
-			if benchmarkWithSum {
-				_ = hasher.Sum(tmp[:0])
-				// FIXME(fwessels): Broken, since Sum closes the stream.
-				// Once fixed this can be removed.
-				hasher.Reset()
-			}
+			wg.Wait()
 		}
 	})
 }
@@ -256,6 +240,7 @@ func BenchmarkAvx2Parallel(b *testing.B) {
 
 	// Make sure AVX512 is disabled
 	hasAVX512 = false
+	b.SetParallelism((runtime.GOMAXPROCS(0) + 1) / 2)
 
 	b.Run("32KB", func(b *testing.B) {
 		benchmarkAvx2P(b, 32*1024)
@@ -283,45 +268,6 @@ func BenchmarkAvx2Parallel(b *testing.B) {
 	})
 	b.Run("8MB", func(b *testing.B) {
 		benchmarkAvx2P(b, 8*1024*1024)
-	})
-	hasAVX512 = restore
-}
-
-func benchmarkAvx2ParallelSingle(b *testing.B) {
-	if !cpuid.CPU.AVX2() {
-		b.SkipNow()
-	}
-	restore := hasAVX512
-
-	// Make sure AVX512 is disabled
-	hasAVX512 = false
-
-	b.Run("32KB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 32*1024)
-	})
-	b.Run("64KB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 64*1024)
-	})
-	b.Run("128KB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 128*1024)
-	})
-	b.Run("256KB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 256*1024)
-	})
-	b.Run("512KB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 512*1024)
-	})
-	b.Run("1MB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 1024*1024)
-	})
-	b.Run("2MB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 2*1024*1024)
-	})
-	b.Run("4MB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 4*1024*1024)
-	})
-	b.Run("8MB", func(b *testing.B) {
-		benchmarkAvx2PSingle(b, 8*1024*1024)
 	})
 	hasAVX512 = restore
 }

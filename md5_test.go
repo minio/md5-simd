@@ -102,11 +102,12 @@ func TestGolden16(t *testing.T) {
 }
 
 func TestGolangGolden16(t *testing.T) {
-
 	server := NewServer()
-	h16 := [16]hash.Hash{}
+	defer server.Close()
+	h16 := [16]Hasher{}
 	for i := range h16 {
 		h16[i] = server.NewHash()
+		defer h16[i].Close()
 	}
 
 	// Skip first 8, so we even 2 rounds of 16 test vectors
@@ -121,7 +122,7 @@ func TestGolangGolden16(t *testing.T) {
 		for i := range h16 {
 			digest := h16[i].Sum([]byte{})
 			if fmt.Sprintf("%x", digest) != golden16[tc+i].want {
-				t.Errorf("TestGolangGolden[%d], got %v, want %v", tc+i, fmt.Sprintf("%x", digest), golden16[tc+i].want)
+				t.Errorf("TestGolangGolden[%d], got %v, want %v, uid:%+v", tc+i, fmt.Sprintf("%x", digest), golden16[tc+i].want, h16[i])
 			}
 		}
 	}
