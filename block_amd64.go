@@ -101,15 +101,15 @@ func init() {
 }
 
 // Interface function to assembly code
-func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte, half bool) {
+func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 	if hasAVX512 {
-		blockMd5_avx512(s, input)
+		blockMd5_avx512(d, input, &s.maskRounds16)
 	} else {
-		s8a, s8b := digest8{}, digest8{}
-		for i := range s8a.v0 {
+		d8a, d8b := digest8{}, digest8{}
+		for i := range d8a.v0 {
 			j := i + 8
-			s8a.v0[i], s8a.v1[i], s8a.v2[i], s8a.v3[i] = s.v0[i], s.v1[i], s.v2[i], s.v3[i]
-			s8b.v0[i], s8b.v1[i], s8b.v2[i], s8b.v3[i] = s.v0[j], s.v1[j], s.v2[j], s.v3[j]
+			d8a.v0[i], d8a.v1[i], d8a.v2[i], d8a.v3[i] = d.v0[i], d.v1[i], d.v2[i], d.v3[i]
+			d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i] = d.v0[j], d.v1[j], d.v2[j], d.v3[j]
 		}
 
 		i8 := [2][8][]byte{}
@@ -117,25 +117,25 @@ func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte, half bool) {
 			i8[0][i], i8[1][i] = input[i], input[8+i]
 		}
 		if half {
-			blockMd5_avx2(&s8a, i8[0], bases[0])
+			blockMd5_avx2(&d8a, i8[0], s.bases[0], &s.maskRounds8a)
 		} else {
 			wg := sync.WaitGroup{}
 			wg.Add(2)
-			go func() { blockMd5_avx2(&s8a, i8[0], bases[0]); wg.Done() }()
-			go func() { blockMd5_avx2(&s8b, i8[1], bases[1]); wg.Done() }()
+			go func() { blockMd5_avx2(&d8a, i8[0], s.bases[0], &s.maskRounds8a); wg.Done() }()
+			go func() { blockMd5_avx2(&d8b, i8[1], s.bases[1], &s.maskRounds8b); wg.Done() }()
 			wg.Wait()
 		}
 
-		for i := range s8a.v0 {
+		for i := range d8a.v0 {
 			j := i + 8
-			s.v0[i], s.v1[i], s.v2[i], s.v3[i] = s8a.v0[i], s8a.v1[i], s8a.v2[i], s8a.v3[i]
-			s.v0[j], s.v1[j], s.v2[j], s.v3[j] = s8b.v0[i], s8b.v1[i], s8b.v2[i], s8b.v3[i]
+			d.v0[i], d.v1[i], d.v2[i], d.v3[i] = d8a.v0[i], d8a.v1[i], d8a.v2[i], d8a.v3[i]
+			d.v0[j], d.v1[j], d.v2[j], d.v3[j] = d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i]
 		}
 	}
 }
 
 // Interface function to AVX512 assembly code
-func blockMd5_avx512(s *digest16, input [16][]byte) {
+func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) {
 
 	// Sanity check to make sure we're not passing in more data than internalBlockSize
 	{
@@ -156,9 +156,10 @@ func blockMd5_avx512(s *digest16, input [16][]byte) {
 
 	sdup := *s // create copy of initial states to receive intermediate updates
 
-	maskRounds := generateMaskAndRounds16(input)
+	rounds := generateMaskAndRounds16(input, maskRounds)
 
-	for _, m := range maskRounds {
+	for r := 0; r < rounds; r++ {
+		m := maskRounds[r]
 
 		block16(&sdup.v0[0], &ptrs[0], m.mask, int(64*m.rounds))
 
@@ -172,7 +173,7 @@ func blockMd5_avx512(s *digest16, input [16][]byte) {
 }
 
 // Interface function to AVX2 assembly code
-func blockMd5_avx2(s *digest8, input [8][]byte, base []byte) {
+func blockMd5_avx2(s *digest8, input [8][]byte, base []byte, maskRounds *[8]maskRounds) {
 
 	// Sanity check to make sure we're not passing in more data than internalBlockSize
 	{
@@ -191,9 +192,10 @@ func blockMd5_avx2(s *digest8, input [8][]byte, base []byte) {
 
 	sdup := *s // create copy of initial states to receive intermediate updates
 
-	maskRounds := generateMaskAndRounds8(input)
+	rounds := generateMaskAndRounds8(input, maskRounds)
 
-	for _, m := range maskRounds {
+	for r := 0; r < rounds; r++ {
+		m := maskRounds[r]
 		var cache cache8 // stack storage for block8 tmp state
 		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
 

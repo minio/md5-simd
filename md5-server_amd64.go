@@ -49,11 +49,14 @@ type lanesInfo [Lanes]blockInput
 
 // md5Server - Type to implement parallel handling of MD5 invocations
 type md5Server struct {
-	uidCounter uint64
-	cycle      chan uint64           // client with uid has update.
-	newInput   chan newClient        // Add new client.
-	digests    map[uint64][Size]byte // Map of uids to (interim) digest results
-	bases      [2][]byte             // base memory (only for non-AVX512 mode)
+	uidCounter   uint64
+	cycle        chan uint64           // client with uid has update.
+	newInput     chan newClient        // Add new client.
+	digests      map[uint64][Size]byte // Map of uids to (interim) digest results
+	maskRounds16 [16]maskRounds        // Pre-allocated static array for max 16 rounds
+	maskRounds8a [8]maskRounds         // Pre-allocated static array for max 8 rounds (1st AVX2 core)
+	maskRounds8b [8]maskRounds         // Pre-allocated static array for max 8 rounds (2nd AVX2 core)
+	bases        [2][]byte             // base memory (only for non-AVX512 mode)
 }
 
 // NewServer - Create new object for parallel processing handling
@@ -263,7 +266,7 @@ func (s *md5Server) blocks(lanes []blockInput) {
 	// Collect active digests...
 	state := s.getDigests(lanes)
 	// Process all lanes...
-	blockMd5_x16(&state, inputs, s.bases, len(lanes) <= 8)
+	s.blockMd5_x16(&state, inputs, len(lanes) <= 8)
 
 	for i, lane := range lanes {
 		uid := lane.uid

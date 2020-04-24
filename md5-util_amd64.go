@@ -20,7 +20,7 @@ type maskRounds struct {
 	rounds uint64
 }
 
-func generateMaskAndRounds8(input [8][]byte) (mr []maskRounds) {
+func generateMaskAndRounds8(input [8][]byte, mr *[8]maskRounds) (rounds int) {
 	// Sort on blocks length small to large
 	var sorted [8]lane
 	for c, inpt := range input {
@@ -31,22 +31,20 @@ func generateMaskAndRounds8(input [8][]byte) (mr []maskRounds) {
 	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
 	m, round := uint64(0xff), uint64(0)
 
-	// TODO: reuse this slice...
-	mr = make([]maskRounds, 0, 8)
 	for _, s := range sorted {
 		if s.len > 0 {
 			if uint64(s.len)>>6 > round {
-				mr = append(mr, maskRounds{m, (uint64(s.len) >> 6) - round})
+				mr[rounds] = maskRounds{m, (uint64(s.len) >> 6) - round}
+				rounds++
 			}
 			round = uint64(s.len) >> 6
 		}
 		m = m & ^(1 << uint(s.pos))
 	}
-
 	return
 }
 
-func generateMaskAndRounds16(input [16][]byte) (mr []maskRounds) {
+func generateMaskAndRounds16(input [16][]byte, mr *[16]maskRounds) (rounds int) {
 
 	// Sort on blocks length small to large
 	var sorted [16]lane
@@ -57,16 +55,16 @@ func generateMaskAndRounds16(input [16][]byte) (mr []maskRounds) {
 
 	// Create mask array including 'rounds' (of processing blocks of 64 bytes) between masks
 	m, round := uint64(0xffff), uint64(0)
-	mr = make([]maskRounds, 0, 16)
+
 	for _, s := range sorted {
 		if s.len > 0 {
 			if uint64(s.len)>>6 > round {
-				mr = append(mr, maskRounds{m, (uint64(s.len) >> 6) - round})
+				mr[rounds] = maskRounds{m, (uint64(s.len) >> 6) - round}
+				rounds++
 			}
 			round = uint64(s.len) >> 6
 		}
 		m = m & ^(1 << uint(s.pos))
 	}
-
 	return
 }

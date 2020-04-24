@@ -38,13 +38,19 @@ var goldenMask = []maskTest{
 
 func TestGenerateMaskAndRounds(t *testing.T) {
 	input := [8][]byte{}
+	maskRound := [8]maskRounds{}
 	for gcase, g := range goldenMask {
 		for i, l := range g.in {
 			buf := make([]byte, l)
 			input[i] = buf[:]
 		}
 
-		mr := generateMaskAndRounds8(input)
+		rounds := generateMaskAndRounds8(input, &maskRound)
+
+		mr := make([]maskRounds, 0, 8)
+		for r := 0; r < rounds; r++ {
+			mr = append(mr, maskRound[r])
+		}
 
 		if !reflect.DeepEqual(mr, g.out) {
 			t.Fatalf("case %d: got %04x\n                    want %04x", gcase, mr, g.out)
