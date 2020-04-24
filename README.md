@@ -55,7 +55,8 @@ BenchmarkParallel/8MB-4       2152.75      8483.01      3.94x
 Compared to `crypto/md5`, the AVX512 is almost up to 8x faster (for larger block sizes):
 
 ```
-$ benchcmp crypto-md5.txt avx512.txt                                                                        enchmark                     old MB/s     new MB/s     speedup
+$ benchcmp crypto-md5.txt avx512.txt
+benchmark                     old MB/s     new MB/s     speedup
 BenchmarkParallel/32KB-4      2229.40       7320.85     3.28x
 BenchmarkParallel/64KB-4      2233.49       9491.57     4.25x
 BenchmarkParallel/128KB-4     2235.64      11616.18     5.20x
