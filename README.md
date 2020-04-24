@@ -99,13 +99,20 @@ Note that two load (gather) instructions are needed because the AVX512 version p
 
 Due to the fact that pointers are directly passed in from the Golang slices, we need to protect against NULL pointers. For this a 16-bit mask is passed in the AVX512 assembly code which is used during the `VPGATHERQD` instructions to mask out lanes that could otherwise result in segment violations.
 
+### Minor optimizations
+
+The `roll` macro (three instructions on AVX2) is no longer needed for AVX512 and is replaced by a single `VPROLD` instruction.
+
+Also several logical operations from the various ROUNDS of the AVX2 version could be combined into a single instruction using ternary logic (with the `VPTERMLOGD` instruction), resulting in a further simplification and speed-up.
+
 ## Low level block function performance
 
-The benchmark below shows the (single thread) maximum performance of the `block()` function for AVX2 (having 8 lanes) and AVX512 (having 16 lanes) performance:
+The benchmark below shows the (single thread) maximum performance of the `block()` function for AVX2 (having 8 lanes) and AVX512 (having 16 lanes). Also the baseline single-core performance from the standard `crypto/md5` package is shown for comparison.
 
 ```
-BenchmarkBlock8-4        9695575               124 ns/op        4144.80 MB/s           0 B/op          0 allocs/op
-BenchmarkBlock16-4       9580390               124 ns/op        8228.88 MB/s           0 B/op          0 allocs/op
+BenchmarkCryptoMd5-4                     687.66 MB/s           0 B/op          0 allocs/op
+BenchmarkBlock8-4                       4144.80 MB/s           0 B/op          0 allocs/op
+BenchmarkBlock16-4                      8228.88 MB/s           0 B/op          0 allocs/op
 ```
 
 ## Limitations
