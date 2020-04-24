@@ -32,34 +32,39 @@ As an example:
 
 ## Performance
 
-The following chart compares the single-core performance between `crypto/md5` vs the AVX2 vs the AVX512 code:
+The following chart compares the multi-core performance between `crypto/md5` vs the AVX2 vs the AVX512 code:
 
-![md5-performance-overview](chart/Single-core-MD5-Aggregated-Hashing-Performance.png)
+![md5-performance-overview](chart/Multi-core-MD5-Aggregated-Hashing-Performance.png)
 
-Compared to `crypto/md5`, the AVX2 version is about 2.5 to 3.5 times faster:
-
-```
-benchmark                   old MB/s     new MB/s     speedup
-BenchmarkGolden/32KB-4      688.29       2928.75      4.26x
-BenchmarkGolden/64KB-4      687.97       2937.95      4.27x
-BenchmarkGolden/128KB-4     687.91       2676.93      3.89x
-BenchmarkGolden/256KB-4     687.84       2644.37      3.84x
-BenchmarkGolden/512KB-4     687.94       2630.64      3.82x
-BenchmarkGolden/1MB-4       687.88       2030.45      2.95x
-BenchmarkGolden/2MB-4       687.75       1732.51      2.52x
-```
-
-Compared to AVX2, the AVX512 is up to 2x faster (especially for larger blocks)
+Compared to `crypto/md5`, the AVX2 version is up to 4x faster:
 
 ```
-benchmark                   old MB/s     new MB/s     speedup
-BenchmarkGolden/32KB-4      2928.75      3427.50      1.17x
-BenchmarkGolden/64KB-4      2937.95      3788.35      1.29x
-BenchmarkGolden/128KB-4     2676.93      3612.76      1.35x
-BenchmarkGolden/256KB-4     2644.37      3800.89      1.44x
-BenchmarkGolden/512KB-4     2630.64      3832.28      1.46x
-BenchmarkGolden/1MB-4       2030.45      4086.52      2.01x
-BenchmarkGolden/2MB-4       1732.51      3295.48      1.90x
+benchcmp crypto-md5.txt avx2.txt 
+benchmark                     old MB/s     new MB/s     speedup
+BenchmarkParallel/32KB-4      2229.40      5745.47      2.58x
+BenchmarkParallel/64KB-4      2233.49      6578.90      2.95x
+BenchmarkParallel/128KB-4     2235.64      7395.15      3.31x
+BenchmarkParallel/256KB-4     2237.07      8006.78      3.58x
+BenchmarkParallel/512KB-4     2237.42      8392.50      3.75x
+BenchmarkParallel/1MB-4       2232.63      8566.43      3.84x
+BenchmarkParallel/2MB-4       2205.05      8618.54      3.91x
+BenchmarkParallel/4MB-4       2205.85      8552.65      3.88x
+BenchmarkParallel/8MB-4       2152.75      8483.01      3.94x
+```
+
+Compared to `crypto/md5`, the AVX512 is almost up to 8x faster (for larger block sizes):
+
+```
+$ benchcmp crypto-md5.txt avx512.txt                                                                        enchmark                     old MB/s     new MB/s     speedup
+BenchmarkParallel/32KB-4      2229.40       7320.85     3.28x
+BenchmarkParallel/64KB-4      2233.49       9491.57     4.25x
+BenchmarkParallel/128KB-4     2235.64      11616.18     5.20x
+BenchmarkParallel/256KB-4     2237.07      13291.86     5.94x
+BenchmarkParallel/512KB-4     2237.42      14539.31     6.50x
+BenchmarkParallel/1MB-4       2232.63      15464.00     6.93x
+BenchmarkParallel/2MB-4       2205.05      15943.54     7.23x
+BenchmarkParallel/4MB-4       2205.85      16021.47     7.26x
+BenchmarkParallel/8MB-4       2152.75      15919.35     7.39x
 ```
 
 These measurements were performed on AWS EC2 instance of type c5.xlarge equipped with a Xeon Platinum 8124M CPU at 3.0 GHz.
