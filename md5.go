@@ -13,8 +13,8 @@ const (
 	// The size of an MD5 checksum in bytes.
 	Size = 16
 
-	// MaxBlockSize is the preferred write size.
-	MaxBlockSize = 2 << 20
+	// internalBlockSize is the internal block size.
+	internalBlockSize = 32 << 10
 )
 
 type Server interface {

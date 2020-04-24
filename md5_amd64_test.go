@@ -9,6 +9,8 @@ package md5simd
 import (
 	"bytes"
 	"hash"
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/klauspost/cpuid"
@@ -38,8 +40,6 @@ func benchmarkAvx512(b *testing.B, blockSize int) {
 		if benchmarkWithSum {
 			for i := range h16 {
 				_ = h16[i].Sum(tmp[:0])
-				// FIXME(fwessels): Broken, since Sum closes the stream.
-				// Once fixed this can be removed.
 				h16[i].Reset()
 			}
 		}
@@ -142,29 +142,32 @@ func benchmarkAvx2(b *testing.B, blockSize int) {
 		h16[i] = server.NewHash()
 		input[i] = bytes.Repeat([]byte{0x61 + byte(i)}, blockSize)
 	}
-
-	const cores = 2 // AVX2 runs on two cores, so split effective performance in half
-	b.SetBytes(int64(blockSize * 16 / cores))
+	// Technically this uses up to 2 cores, but it is the throughput of a single server.
+	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
 	var tmp [Size]byte
 
 	for j := 0; j < b.N; j++ {
+		var wg sync.WaitGroup
+		wg.Add(16)
 		for i := range h16 {
-			h16[i].Write(input[i])
-		}
-		if benchmarkWithSum {
-			for i := range h16 {
-				_ = h16[i].Sum(tmp[:0])
-				// FIXME(fwessels): Broken, since Sum closes the stream.
-				// Once fixed this can be removed.
+			go func(i int) {
+				// write to all concurrently
+				defer wg.Done()
 				h16[i].Reset()
-			}
+				h16[i].Write(input[i])
+				if benchmarkWithSum {
+					_ = h16[i].Sum(tmp[:0])
+				}
+			}(i)
 		}
+		wg.Wait()
 	}
 }
 
 func benchmarkAvx2P(b *testing.B, blockSize int) {
+	// We write input 16x per loop.
 	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -172,23 +175,27 @@ func benchmarkAvx2P(b *testing.B, blockSize int) {
 		input := bytes.Repeat([]byte{0x61}, blockSize)
 		server := NewServer()
 		defer server.Close()
-		h16 := [16]hash.Hash{}
+		var h16 [16]Hasher
 		for i := range h16 {
 			h16[i] = server.NewHash()
+			defer h16[i].Close()
 		}
 		var tmp [Size]byte
 		for pb.Next() {
+			var wg sync.WaitGroup
+			wg.Add(16)
 			for i := range h16 {
-				h16[i].Write(input)
-			}
-			if benchmarkWithSum {
-				for i := range h16 {
-					_ = h16[i].Sum(tmp[:0])
-					// FIXME(fwessels): Broken, since Sum closes the stream.
-					// Once fixed this can be removed.
+				// Write to all concurrently
+				go func(i int) {
+					defer wg.Done()
 					h16[i].Reset()
-				}
+					h16[i].Write(input)
+					if benchmarkWithSum {
+						_ = h16[i].Sum(tmp[:0])
+					}
+				}(i)
 			}
+			wg.Wait()
 		}
 	})
 }
@@ -256,6 +263,7 @@ func BenchmarkAvx2Parallel(b *testing.B) {
 
 	// Make sure AVX512 is disabled
 	hasAVX512 = false
+	b.SetParallelism((runtime.GOMAXPROCS(0) + 1) / 2)
 
 	b.Run("32KB", func(b *testing.B) {
 		benchmarkAvx2P(b, 32*1024)

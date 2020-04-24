@@ -9,20 +9,17 @@ package md5simd
 import (
 	"encoding/binary"
 	"errors"
-	"time"
+	"fmt"
 )
 
 // md5Digest - Type for computing MD5 using either AVX2 or AVX512
 type md5Digest struct {
-	uid       uint64
-	md5srv    *md5Server
-	x         [BlockSize]byte
-	nx        int
-	len       uint64
-	closed    bool
-	result    [Size]byte
-	needsInit bool
-	initState [Size]byte
+	uid         uint64
+	blocksCh    chan blockInput
+	cycleServer chan uint64
+	x           [BlockSize]byte
+	nx          int
+	len         uint64
 }
 
 // Size - Return size of checksum
@@ -32,33 +29,25 @@ func (d *md5Digest) Size() int { return Size }
 func (d md5Digest) BlockSize() int { return BlockSize }
 
 func (d *md5Digest) Reset() {
-	if !d.closed {
-		d.reset()
+	if d.blocksCh == nil {
+		panic("reset after close")
 	}
-}
-
-// reset - reset digest to its initial values
-func (d *md5Digest) reset() {
-	d.md5srv.blocksCh <- blockInput{uid: d.uid, reset: true}
 	d.nx = 0
 	d.len = 0
-	d.closed = false
-	d.needsInit = false
-	d.uid = d.md5srv.updateUid() // Make sure new writes (if any) occur with new uid (and thus new lane)
+	d.sendBlock(blockInput{uid: d.uid, reset: true})
 }
 
 // write to digest
 func (d *md5Digest) Write(p []byte) (nn int, err error) {
-
-	if d.closed {
-		return 0, errors.New("md5Digest already closed. Reset first before writing again")
+	if d.blocksCh == nil {
+		return 0, errors.New("md5Digest closed")
 	}
 
-	// break input into chunks of maximum MaxBlockSize size
+	// break input into chunks of maximum internalBlockSize size
 	for {
 		l := len(p)
-		if l > MaxBlockSize {
-			l = MaxBlockSize
+		if l > internalBlockSize {
+			l = internalBlockSize
 		}
 		nnn, err := d.write(p[:l])
 		if err != nil {
@@ -71,20 +60,11 @@ func (d *md5Digest) Write(p []byte) (nn int, err error) {
 			break
 		}
 
-		time.Sleep(writeSleepMs * time.Millisecond)
 	}
 	return
 }
 
 func (d *md5Digest) write(p []byte) (nn int, err error) {
-
-	dispatch := func(bi blockInput) {
-		if d.needsInit {
-			d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: d.initState[:], init: true}
-			d.needsInit = false
-		}
-		d.md5srv.blocksCh <- bi
-	}
 
 	nn = len(p)
 	d.len += uint64(nn)
@@ -92,14 +72,14 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		n := copy(d.x[d.nx:], p)
 		d.nx += n
 		if d.nx == BlockSize {
-			dispatch(blockInput{uid: d.uid, msg: d.x[:]})
+			d.sendBlock(blockInput{uid: d.uid, msg: d.x[:]})
 			d.nx = 0
 		}
 		p = p[n:]
 	}
 	if len(p) >= BlockSize {
 		n := len(p) &^ (BlockSize - 1)
-		dispatch(blockInput{uid: d.uid, msg: p[:n]})
+		d.sendBlock(blockInput{uid: d.uid, msg: p[:n]})
 		p = p[n:]
 	}
 	if len(p) > 0 {
@@ -109,49 +89,50 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 }
 
 func (d *md5Digest) Close() {
-	if !d.closed {
-		// Reset the state on the server side before closing this hash
-		d.reset()
-		d.closed = true
+	if d.blocksCh != nil {
+		close(d.blocksCh)
+		d.blocksCh = nil
 	}
 }
 
 // Sum - Return MD5 sum in bytes
 func (d *md5Digest) Sum(in []byte) (result []byte) {
-
-	if d.closed {
-		return append(in, d.result[:]...)
+	if d.blocksCh == nil {
+		panic("sum after close")
 	}
 
 	trail := make([]byte, 0, 128)
 	trail = append(trail, d.x[:d.nx]...)
 
-	len := d.len
+	length := d.len
 	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
 	var tmp [64]byte
 	tmp[0] = 0x80
-	if len%64 < 56 {
-		trail = append(trail, tmp[0:56-len%64]...)
+	if length%64 < 56 {
+		trail = append(trail, tmp[0:56-length%64]...)
 	} else {
-		trail = append(trail, tmp[0:64+56-len%64]...)
+		trail = append(trail, tmp[0:64+56-length%64]...)
 	}
-	d.nx = 0
 
 	// Length in bits.
-	len <<= 3
-	binary.LittleEndian.PutUint64(tmp[:], len) // append length in bits
+	length <<= 3
+	binary.LittleEndian.PutUint64(tmp[:], length) // append length in bits
+
 	trail = append(trail, tmp[0:8]...)
+	if len(trail)%BlockSize != 0 {
+		panic(fmt.Errorf("internal error: sum block was not aligned. len=%d, nx=%d", len(trail), d.nx))
+	}
+	sumCh := make(chan sumResult, 1)
+	d.sendBlock(blockInput{uid: d.uid, msg: trail, sumCh: sumCh})
 
-	sumCh := make(chan sumResult)
-	d.md5srv.blocksCh <- blockInput{uid: d.uid, msg: trail, sumCh: sumCh}
 	sum := <-sumCh
-	copy(d.result[:], sum.digest[:])
 
-	// For when continuing to write, save intermediate state, so that
-	// we can re-initialize with this, before sending out the next block to hash
-	copy(d.initState[:], sum.state[:])
-	d.needsInit = true
-	d.uid = d.md5srv.updateUid()
+	return append(in, sum.digest[:]...)
+}
 
-	return append(in, d.result[:]...)
+func (d *md5Digest) sendBlock(bi blockInput) {
+	select {
+	case d.blocksCh <- bi:
+		d.cycleServer <- d.uid
+	}
 }

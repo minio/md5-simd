@@ -26,12 +26,15 @@ func block16(state *uint32, ptrs *int64, mask uint64, n int)
 // NewHash - initialize instance for Md5 implementation.
 func (s *md5Server) NewHash() Hasher {
 	uid := atomic.AddUint64(&s.uidCounter, 1)
-	return &md5Digest{uid: uid, md5srv: s}
-}
-
-func (s *md5Server) updateUid() (uid uint64) {
-	uid = atomic.AddUint64(&s.uidCounter, 1)
-	return
+	blockCh := make(chan blockInput, 5)
+	s.newInput <- newClient{
+		uid:   uid,
+		input: blockCh,
+	}
+	return &md5Digest{
+		uid: uid, blocksCh: blockCh,
+		cycleServer: s.cycle,
+	}
 }
 
 // 8-way 4x uint32 digests in 4 ymm registers
@@ -98,7 +101,7 @@ func init() {
 }
 
 // Interface function to assembly code
-func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte) {
+func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte, half bool) {
 	if hasAVX512 {
 		blockMd5_avx512(s, input)
 	} else {
@@ -113,12 +116,15 @@ func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte) {
 		for i := range i8[0] {
 			i8[0][i], i8[1][i] = input[i], input[8+i]
 		}
-
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		go func() { blockMd5_avx2(&s8a, i8[0], bases[0]); wg.Done() }()
-		go func() { blockMd5_avx2(&s8b, i8[1], bases[1]); wg.Done() }()
-		wg.Wait()
+		if half {
+			blockMd5_avx2(&s8a, i8[0], bases[0])
+		} else {
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			go func() { blockMd5_avx2(&s8a, i8[0], bases[0]); wg.Done() }()
+			go func() { blockMd5_avx2(&s8b, i8[1], bases[1]); wg.Done() }()
+			wg.Wait()
+		}
 
 		for i := range s8a.v0 {
 			j := i + 8
@@ -131,11 +137,11 @@ func blockMd5_x16(s *digest16, input [16][]byte, bases [2][]byte) {
 // Interface function to AVX512 assembly code
 func blockMd5_avx512(s *digest16, input [16][]byte) {
 
-	// Sanity check to make sure we're not passing in more data than MaxBlockSize
+	// Sanity check to make sure we're not passing in more data than internalBlockSize
 	{
 		for i := 1; i < len(input); i++ {
-			if len(input[i]) > MaxBlockSize {
-				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed MaxBlockSize", i))
+			if len(input[i]) > internalBlockSize {
+				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
 			}
 		}
 	}
@@ -168,16 +174,17 @@ func blockMd5_avx512(s *digest16, input [16][]byte) {
 // Interface function to AVX2 assembly code
 func blockMd5_avx2(s *digest8, input [8][]byte, base []byte) {
 
-	// Sanity check to make sure we're not passing in more data than MaxBlockSize
+	// Sanity check to make sure we're not passing in more data than internalBlockSize
 	{
 		for i := 1; i < len(input); i++ {
-			if len(input[i]) > MaxBlockSize {
-				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed MaxBlockSize", i))
+			if len(input[i]) > internalBlockSize {
+				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
 			}
 		}
 	}
 
-	bufs := [8]int32{4, 4 + MaxBlockSize, 4 + MaxBlockSize*2, 4 + MaxBlockSize*3, 4 + MaxBlockSize*4, 4 + MaxBlockSize*5, 4 + MaxBlockSize*6, 4 + MaxBlockSize*7}
+	bufs := [8]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7}
+
 	for i := 0; i < len(input); i++ {
 		copy(base[bufs[i]:], input[i])
 	}

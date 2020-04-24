@@ -8,17 +8,17 @@ package md5simd
 
 import (
 	"encoding/binary"
-	"time"
+	"fmt"
+	"runtime"
 
 	"github.com/klauspost/cpuid"
 )
 
-// Estimated sleep time for a chunk of MaxBlockSize based
-// on 800 MB/sec hashing performance
-const writeSleepMs = 1000 * MaxBlockSize / (800 * 1024 * 1024)
-
 // MD5 initialization constants
 const (
+	// Lanes is the number of concurrently calculated hashes.
+	Lanes = 16
+
 	init0 = 0x67452301
 	init1 = 0xefcdab89
 	init2 = 0x98badcfe
@@ -27,34 +27,31 @@ const (
 
 // md5ServerUID - Does not start at 0 but next multiple of 16 so as to be able to
 // differentiate with default initialisation value of 0
-const md5ServerUID = 16
+const md5ServerUID = Lanes
 
 // Message to send across input channel
 type blockInput struct {
 	uid   uint64
 	msg   []byte
-	reset bool
-	init  bool
 	sumCh chan sumResult
+	reset bool
+}
+
+type blockProcessor struct {
+	bases [2][]byte // base memory (only for non-AVX512 mode)
 }
 
 type sumResult struct {
 	digest [Size]byte
-	state  [Size]byte
 }
 
-// md5LaneInfo - Info for each lane
-type md5LaneInfo struct {
-	uid   uint64 // unique identification for this MD5 processing
-	block []byte // input block to be processed
-}
+type lanesInfo [Lanes]blockInput
 
 // md5Server - Type to implement parallel handling of MD5 invocations
 type md5Server struct {
 	uidCounter uint64
-	blocksCh   chan blockInput       // Input channel
-	totalIn    int                   // Total number of inputs waiting to be processed
-	lanes      [16]md5LaneInfo       // Array with info per lane
+	cycle      chan uint64           // client with uid has update.
+	newInput   chan newClient        // Add new client.
 	digests    map[uint64][Size]byte // Map of uids to (interim) digest results
 	bases      [2][]byte             // base memory (only for non-AVX512 mode)
 }
@@ -66,174 +63,223 @@ func NewServer() Server {
 	}
 	md5srv := &md5Server{}
 	md5srv.digests = make(map[uint64][Size]byte)
-	md5srv.blocksCh = make(chan blockInput)
+	md5srv.newInput = make(chan newClient, Lanes)
+	md5srv.cycle = make(chan uint64, Lanes)
 	md5srv.uidCounter = md5ServerUID - 1
 	if !hasAVX512 {
 		// only reserve memory when not on AVX512
-		md5srv.bases[0] = make([]byte, 4+8*MaxBlockSize)
-		md5srv.bases[1] = make([]byte, 4+8*MaxBlockSize)
+		md5srv.bases[0] = make([]byte, 4+8*internalBlockSize)
+		md5srv.bases[1] = make([]byte, 4+8*internalBlockSize)
 	}
 
 	// Start a single thread for reading from the input channel
-	go md5srv.process(md5srv.blocksCh)
+	go md5srv.process(md5srv.newInput)
 	return md5srv
 }
 
-// process - Sole handler for reading from the input channel
-func (s *md5Server) process(blocksCh chan blockInput) {
-	processBlock := func(block blockInput) {
-		// If reset message, reset and we're done
-		if block.reset {
-			s.reset(block.uid)
-			return
-		} else if block.init {
-			s.init(block.uid, block.msg)
+type newClient struct {
+	uid   uint64
+	input chan blockInput
+}
+
+// process - Sole handler for reading from the input channel.
+func (s *md5Server) process(newClients chan newClient) {
+	// To fill up as many lanes as possible:
+	//
+	// 1. Wait for a cycle id.
+	// 2. If not already in a lane, add, otherwise leave on channel
+	// 3. Start timer
+	// 4. Check if lanes is full, if so, goto 10 (process).
+	// 5. If timeout, goto 10.
+	// 6. Wait for new id (goto 2)  or timeout (goto 10).
+	// 10. Process.
+	// 11. Check all input if there is already input, if so add to lanes.
+	// 12. Goto 1
+
+	// lanes contains the lanes.
+	var lanes lanesInfo
+	// lanesFilled contains the number of filled lanes for current cycle.
+	var lanesFilled int
+	// clients contains active clients
+	var clients = make(map[uint64]chan blockInput, Lanes)
+
+	addToLane := func(uid uint64) {
+		cl, ok := clients[uid]
+		if !ok {
+			// Unknown client. Maybe it was already removed.
 			return
 		}
-
-		// Get slot
-		index := block.uid % uint64(len(s.lanes))
-
-		if s.lanes[index].block != nil {
-			// If slot is already filled, process all inputs,
-			// including most probably previous block for same hash
-			s.blocks()
-		}
-
-		// Intercept sum messages (small by definition), so process synchronously
- 		if block.sumCh != nil {
-
-			var dig digest
-			d, ok := s.digests[block.uid]
-			if ok {
-				dig.s[0] = binary.LittleEndian.Uint32(d[0:4])
-				dig.s[1] = binary.LittleEndian.Uint32(d[4:8])
-				dig.s[2] = binary.LittleEndian.Uint32(d[8:12])
-				dig.s[3] = binary.LittleEndian.Uint32(d[12:16])
-			} else {
-				dig.s[0], dig.s[1], dig.s[2], dig.s[3] = init0, init1, init2, init3
+		// Check if we already have it.
+		for _, lane := range lanes[:lanesFilled] {
+			if lane.uid == uid {
+				return
 			}
-
-			sum := sumResult{}
-			binary.LittleEndian.PutUint32(sum.state[0:], dig.s[0])
-			binary.LittleEndian.PutUint32(sum.state[4:], dig.s[1])
-			binary.LittleEndian.PutUint32(sum.state[8:], dig.s[2])
-			binary.LittleEndian.PutUint32(sum.state[12:], dig.s[3])
-
-			blockGeneric(&dig, block.msg)
-
-			binary.LittleEndian.PutUint32(sum.digest[0:], dig.s[0])
-			binary.LittleEndian.PutUint32(sum.digest[4:], dig.s[1])
-			binary.LittleEndian.PutUint32(sum.digest[8:], dig.s[2])
-			binary.LittleEndian.PutUint32(sum.digest[12:], dig.s[3])
-
-			block.sumCh <- sum
-
-			// Reset the info for this hash. If we want to continue
-			// we'll send an init message with the interim state along
-			// with a new uid
-			s.reset(block.uid)
-			return
 		}
+		// Continue until we get a block or there is nothing on channel
+		for {
+			select {
+			case block, ok := <-cl:
+				if !ok {
+					// Client disconnected
+					delete(clients, block.uid)
+					return
+				}
+				if block.uid != uid {
+					panic(fmt.Errorf("uid mismatch, %d (block) != %d (client)", block.uid, uid))
+				}
+				// If reset message, reset and we're done
+				if block.reset {
+					delete(s.digests, uid)
+					continue
+				}
 
-		s.totalIn++
-		s.lanes[index] = md5LaneInfo{uid: block.uid, block: block.msg}
-		if s.totalIn == len(s.lanes) {
-			// if all lanes are filled, process all lanes
-			s.blocks()
+				// If requesting sum, we will need to maintain state.
+				if block.sumCh != nil {
+					var dig digest
+					d, ok := s.digests[uid]
+					if ok {
+						dig.s[0] = binary.LittleEndian.Uint32(d[0:4])
+						dig.s[1] = binary.LittleEndian.Uint32(d[4:8])
+						dig.s[2] = binary.LittleEndian.Uint32(d[8:12])
+						dig.s[3] = binary.LittleEndian.Uint32(d[12:16])
+					} else {
+						dig.s[0], dig.s[1], dig.s[2], dig.s[3] = init0, init1, init2, init3
+					}
+
+					sum := sumResult{}
+					// Add end block to current digest.
+					blockGeneric(&dig, block.msg)
+
+					binary.LittleEndian.PutUint32(sum.digest[0:], dig.s[0])
+					binary.LittleEndian.PutUint32(sum.digest[4:], dig.s[1])
+					binary.LittleEndian.PutUint32(sum.digest[8:], dig.s[2])
+					binary.LittleEndian.PutUint32(sum.digest[12:], dig.s[3])
+					block.sumCh <- sum
+					continue
+				}
+				if len(block.msg) == 0 {
+					continue
+				}
+				lanes[lanesFilled] = block
+				lanesFilled++
+				return
+			default:
+				return
+			}
 		}
+	}
+	addNewClient := func(cl newClient) {
+		if _, ok := clients[cl.uid]; ok {
+			panic("internal error: duplicate client registration")
+		}
+		clients[cl.uid] = cl.input
+	}
+
+	allLanesFilled := func() bool {
+		return lanesFilled == Lanes || lanesFilled >= len(clients)
 	}
 
 	for {
-		select {
-		case block, ok := <-blocksCh:
-			if !ok {
-				return
-			}
-			processBlock(block)
-		}
-
-		for busy := true; busy; {
+		// Step 1.
+		for lanesFilled == 0 {
 			select {
-			case block, ok := <-blocksCh:
+			case cl, ok := <-newClients:
 				if !ok {
 					return
 				}
-				processBlock(block)
+				addNewClient(cl)
+				// Check if it already sent a payload.
+				addToLane(cl.uid)
+				continue
+			case uid := <-s.cycle:
+				addToLane(uid)
+			}
+		}
 
-			case <-time.After(10 * time.Microsecond):
-				l, lane := 0, md5LaneInfo{}
-				for l, lane = range s.lanes {
-					if lane.block != nil { // check if there is any input to process
-						s.blocks()
-						break // we are done
-					}
+	fillLanes:
+		for !allLanesFilled() {
+			select {
+			case cl, ok := <-newClients:
+				if !ok {
+					return
 				}
-				if l == len(s.lanes) { // no work to do, so exit this loop and go back to single select
-					busy = false
+				addNewClient(cl)
+
+			case uid := <-s.cycle:
+				addToLane(uid)
+			default:
+				// Nothing more queued...
+				break fillLanes
+			}
+		}
+
+		// If we did not fill all lanes, check if there is more waiting
+		if !allLanesFilled() {
+			runtime.Gosched()
+			for uid := range clients {
+				addToLane(uid)
+				if allLanesFilled() {
+					break
 				}
+			}
+		}
+		if false {
+			if !allLanesFilled() {
+				fmt.Println("Not all lanes filled", lanesFilled, "of", len(clients))
+				//pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+			} else if true {
+				fmt.Println("all lanes filled")
+			}
+		}
+		// Process the lanes we could collect
+		s.blocks(lanes[:lanesFilled])
+
+		// Clear lanes...
+		lanesFilled = 0
+		// Add all current queued
+		for uid := range clients {
+			addToLane(uid)
+			if allLanesFilled() {
+				break
 			}
 		}
 	}
 }
 
 func (s *md5Server) Close() {
-	if s.blocksCh != nil {
-		close(s.blocksCh)
-		s.blocksCh = nil
+	if s.newInput != nil {
+		close(s.newInput)
+		s.newInput = nil
 	}
-}
-
-// Do a reset for this calculation
-func (s *md5Server) reset(uid uint64) {
-	// Check if there is a message still waiting to be processed (and remove if so)
-	for i, lane := range s.lanes {
-		if lane.uid == uid {
-			if lane.block != nil {
-				s.totalIn--
-			}
-			s.lanes[i] = md5LaneInfo{} // clear message
-			break
-		}
-	}
-
-	// Delete entry from hash map
-	delete(s.digests, uid)
-}
-
-func (s *md5Server) init(uid uint64, msg []byte) {
-	digest := [Size]byte{}
-	copy(digest[:], msg[:Size])
-	s.digests[uid] = digest
 }
 
 // Invoke assembly and send results back
-func (s *md5Server) blocks() {
-
+func (s *md5Server) blocks(lanes []blockInput) {
 	inputs := [16][]byte{}
-	for i := range inputs {
-		inputs[i] = s.lanes[i].block
+	for i := range lanes {
+		inputs[i] = lanes[i].msg
 	}
 
-	state := s.getDigests()
-	blockMd5_x16(&state, inputs, s.bases)
+	// Collect active digests...
+	state := s.getDigests(lanes)
+	// Process all lanes...
+	blockMd5_x16(&state, inputs, s.bases, len(lanes) <= 8)
 
-	s.totalIn = 0
-	for i := 0; i < len(s.lanes); i++ {
-		uid := s.lanes[i].uid
-		digest := [Size]byte{}
-		binary.LittleEndian.PutUint32(digest[0:], state.v0[i])
-		binary.LittleEndian.PutUint32(digest[4:], state.v1[i])
-		binary.LittleEndian.PutUint32(digest[8:], state.v2[i])
-		binary.LittleEndian.PutUint32(digest[12:], state.v3[i])
+	for i, lane := range lanes {
+		uid := lane.uid
+		dig := [Size]byte{}
+		binary.LittleEndian.PutUint32(dig[0:], state.v0[i])
+		binary.LittleEndian.PutUint32(dig[4:], state.v1[i])
+		binary.LittleEndian.PutUint32(dig[8:], state.v2[i])
+		binary.LittleEndian.PutUint32(dig[12:], state.v3[i])
 
-		s.digests[uid] = digest
-		s.lanes[i] = md5LaneInfo{}
+		s.digests[uid] = dig
+		lanes[i] = blockInput{}
 	}
 }
 
-func (s *md5Server) getDigests() (d digest16) {
-	for i, lane := range s.lanes {
+func (s *md5Server) getDigests(lanes []blockInput) (d digest16) {
+	for i, lane := range lanes {
 		a, ok := s.digests[lane.uid]
 		if ok {
 			d.v0[i] = binary.LittleEndian.Uint32(a[0:4])
@@ -249,18 +295,3 @@ func (s *md5Server) getDigests() (d digest16) {
 	}
 	return
 }
-
-/*
-func (s *fallbackServer) write(uid uint64, p []byte) (nn int, err error) {
-	s.blocksCh <- blockInput{uid: uid, msg: p}
-	return len(p), nil
-}
-
-// sum - return sha256 sum in bytes for a given sum id.
-func (s *fallbackServer) sum(uid uint64, p []byte) [16]byte {
-	sumCh := make(chan [16]byte)
-	s.blocksCh <- blockInput{uid: uid, msg: p, final: true, sumCh: sumCh}
-	return <-sumCh
-}
-
-*/

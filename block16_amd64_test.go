@@ -188,9 +188,9 @@ func BenchmarkBlock8(b *testing.B) {
 
 	var cache cache8 // stack storage for block16 tmp state
 
-	bufs := [8]int32{4, 4 + MaxBlockSize, 4 + MaxBlockSize*2, 4 + MaxBlockSize*3, 4 + MaxBlockSize*4, 4 + MaxBlockSize*5, 4 + MaxBlockSize*6, 4 + MaxBlockSize*7}
+	bufs := [8]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7}
 
-	base := make([]byte, 4+16*MaxBlockSize)
+	base := make([]byte, 4+16*internalBlockSize)
 
 	for i := 0; i < len(input); i++ {
 		copy(base[bufs[i]:], input[i])
