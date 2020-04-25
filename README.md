@@ -3,15 +3,22 @@
 
 This is a SIMD accelerated MD5 package, allowing up to either 8 (AVX2) or 16 (AVX512) independent MD5 sums to be calculated on a single CPU core.
 
-It was originally based on the [md5vec](https://github.com/igneous-systems/md5vec) repository by Igneous Systems, but has been made more flexible by  amongst others supporting different message sizes per lane.
+It was originally based on the [md5vec](https://github.com/igneous-systems/md5vec) repository by Igneous Systems, but has been made more flexible by amongst others supporting different message sizes per lane and adding AVX512.
 
-`md5-simd` integrates a similar mechanism as described in https://github.com/minio/sha256-simd#support-for-avx512 for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
+`md5-simd` integrates a similar mechanism as described in [minio/sha256-simd](https://github.com/minio/sha256-simd#support-for-avx512) for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
 
 It is important to understand that `md5-simd` **does not speed up** an individual MD5 hash sum (unless you would be using some hierarchical tree structure). Rather it allows multiple __independent__  MD5 sums to be computed in parallel on the same CPU core, thereby making more efficient usage of the computing resources.
 
 ## Usage
 
-In order to use `md5-simd`, you must first create an `Md5Server` which can subsequently be used to instantiate one (or more) objects for MD5 hashing. These objects conform to the regular `hash.Hash` interface and as such the normal Write/Reset/Sum functionality works as expected. 
+[![Documentation](https://godoc.org/github.com/minio/md5-simd?status.svg)](https://pkg.go.dev/github.com/minio/md5-simd?tab=doc)
+
+
+In order to use `md5-simd`, you must first create an `Server` which can be 
+used to instantiate one or more objects for MD5 hashing. 
+
+These objects conform to the regular [`hash.Hash`](https://pkg.go.dev/hash?tab=doc#Hash) interface 
+and as such the normal Write/Reset/Sum functionality works as expected. 
 
 As an example: 
 ```
@@ -30,7 +37,43 @@ As an example:
     digest := md5Hash.Sum([]byte{})
 ```
 
+To keep performance both a [Server](https://pkg.go.dev/github.com/minio/md5-simd?tab=doc#Server) 
+and individual [Hasher](https://pkg.go.dev/github.com/minio/md5-simd?tab=doc#Hasher) should 
+be closed using the `Close()` function when no longer needed.
+
+A Hasher can efficiently be re-used by using [`Reset()`](https://pkg.go.dev/hash?tab=doc#Hash) functionality.
+
+In case your system does not support the instructions required it will fall back to using `crypto/md5` for hashing.
+
+## Limitations
+
+As explained above `md5-simd` does not speed up an individual MD5 hash sum computation,
+unless some hierarchical tree construct is used but this will result in different outcomes.
+
+Instead, it allows running multiple MD5 calculations in parallel on a single CPU core. 
+This can be beneficial in e.g. multi-threaded server applications where many go-routines 
+are dealing with many requests and multiple MD5 calculations can be packed/scheduled for parallel execution on a single core.
+
+This will result in a lower overall CPU usage as compared to using the standard `crypto/md5`
+functionality where each MD5 hash computation will consume a single thread (core).
+
+It is best to test and measure the overall CPU usage in a representative usage scenario in your application
+to get an overall understanding of the benefits of `md5-simd` as compared to `crypto/md5`, ideally under heavy CPU load.
+
+Also note that `md5-simd` is best meant to work with large objects, 
+so if your application only hashes small objects of a few kilobytes 
+you may be better of by using `crypto/md5`.
+
 ## Performance
+
+For the best performance writes should be a multiple of 64 bytes, ideally a multiple of 32KB.
+To help with that a [`buffered := bufio.NewWriterSize(hasher, 32<<10)`](https://golang.org/pkg/bufio/#NewWriterSize) 
+can be inserted if you are unsure of the sizes of the writes. 
+Remember to [flush](https://golang.org/pkg/bufio/#Writer.Flush) `buffered` before reading the hash. 
+
+A single 'server' can process 16 streams concurrently with 1 core (AVX-512) or 2 cores (AVX2). 
+In situations where it is likely that more than 16 streams are fully loaded it may be beneficial
+to use multiple servers.
 
 The following chart compares the multi-core performance between `crypto/md5` vs the AVX2 vs the AVX512 code:
 
@@ -68,11 +111,11 @@ BenchmarkParallel/4MB-4       2205.85      16021.47     7.26x
 BenchmarkParallel/8MB-4       2152.75      15919.35     7.39x
 ```
 
-These measurements were performed on AWS EC2 instance of type c5.xlarge equipped with a Xeon Platinum 8124M CPU at 3.0 GHz.
+These measurements were performed on AWS EC2 instance of type `c5.xlarge` equipped with a Xeon Platinum 8124M CPU at 3.0 GHz.
 
-## Design
+## Design & Tech
 
-md5-simd has both an AVX2 (8-lane parallel) and an AVX512 (16-lane parallel version) algorithm to accelerate the computation with the following function definitions:
+md5-simd has both an AVX2 (8-lane parallel), and an AVX512 (16-lane parallel version) algorithm to accelerate the computation with the following function definitions:
 ```
 //go:noescape
 func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
@@ -103,7 +146,8 @@ Note that two load (gather) instructions are needed because the AVX512 version p
 
 ### Masking support
 
-Due to the fact that pointers are directly passed in from the Golang slices, we need to protect against NULL pointers. For this a 16-bit mask is passed in the AVX512 assembly code which is used during the `VPGATHERQD` instructions to mask out lanes that could otherwise result in segment violations.
+Due to the fact that pointers are passed directly from the Golang slices, we need to protect against NULL pointers. 
+For this a 16-bit mask is passed in the AVX512 assembly code which is used during the `VPGATHERQD` instructions to mask out lanes that could otherwise result in segment violations.
 
 ### Minor optimizations
 
@@ -120,18 +164,6 @@ BenchmarkCryptoMd5-4                     687.66 MB/s           0 B/op          0
 BenchmarkBlock8-4                       4144.80 MB/s           0 B/op          0 allocs/op
 BenchmarkBlock16-4                      8228.88 MB/s           0 B/op          0 allocs/op
 ```
-
-## Limitations
-
-As explained above `md5-simd` does not speed up an individual MD5 hash sum computation (unless some hierarchical tree construct is used but this will result in different outcomes).
-
-Instead it allows to run multiple MD5 calculations in parallel on a single CPU core. This can be beneficial in e.g. multi-threaded server applications where many go-routines are dealing with many requests and multiple MD5 calculations can be packed/scheduled for parallel execution on a single core.
-
-This will result in a lower overall CPU usage as compared to using the standard `crypto/md5` functionality where each MD5 hash computation will consume a single thread (core).
-
-It is best to test and measure the overall CPU usage in a representative usage scenario in your application to get an overall understanding of the benefits of `md5-simd` as compared to `crypto/md5` (ideally under heavy CPU load).
-
-Also note that `md5-simd` is best meant to work with large objects, so if your application only hashes small objects (KB-size rather than MB-size), you may be better of by using `crypto/md5`.
 
 ## License
 
