@@ -7,7 +7,9 @@ It was originally based on the [md5vec](https://github.com/igneous-systems/md5ve
 
 `md5-simd` integrates a similar mechanism as described in [minio/sha256-simd](https://github.com/minio/sha256-simd#support-for-avx512) for making it easy for clients to take advantages of the parallel nature of the MD5 calculation. This will result in reduced overall CPU load. 
 
-It is important to understand that `md5-simd` **does not speed up** an individual MD5 hash sum (unless you would be using some hierarchical tree structure). Rather it allows multiple __independent__  MD5 sums to be computed in parallel on the same CPU core, thereby making more efficient usage of the computing resources.
+It is important to understand that `md5-simd` **does not speed up** a single threaded MD5 hash sum. 
+Rather it allows multiple __independent__  MD5 sums to be computed in parallel on the same CPU core, 
+thereby making more efficient usage of the computing resources.
 
 ## Usage
 
@@ -49,6 +51,7 @@ In case your system does not support the instructions required it will fall back
 
 As explained above `md5-simd` does not speed up an individual MD5 hash sum computation,
 unless some hierarchical tree construct is used but this will result in different outcomes.
+Running a single hash on a server results in approximately half the throughput.
 
 Instead, it allows running multiple MD5 calculations in parallel on a single CPU core. 
 This can be beneficial in e.g. multi-threaded server applications where many go-routines 
