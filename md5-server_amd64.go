@@ -67,7 +67,7 @@ func NewServer() Server {
 	md5srv := &md5Server{}
 	md5srv.digests = make(map[uint64][Size]byte)
 	md5srv.newInput = make(chan newClient, Lanes)
-	md5srv.cycle = make(chan uint64, Lanes)
+	md5srv.cycle = make(chan uint64, Lanes*10)
 	md5srv.uidCounter = md5ServerUID - 1
 	if !hasAVX512 {
 		// only reserve memory when not on AVX512

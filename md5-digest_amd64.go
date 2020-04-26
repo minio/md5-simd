@@ -34,7 +34,7 @@ func (d *md5Digest) Reset() {
 	}
 	d.nx = 0
 	d.len = 0
-	d.sendBlock(blockInput{uid: d.uid, reset: true})
+	d.sendBlock(blockInput{uid: d.uid, reset: true}, false)
 }
 
 // write to digest
@@ -72,14 +72,14 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		n := copy(d.x[d.nx:], p)
 		d.nx += n
 		if d.nx == BlockSize {
-			d.sendBlock(blockInput{uid: d.uid, msg: d.x[:]})
+			d.sendBlock(blockInput{uid: d.uid, msg: d.x[:]}, len(p)-n < BlockSize)
 			d.nx = 0
 		}
 		p = p[n:]
 	}
 	if len(p) >= BlockSize {
 		n := len(p) &^ (BlockSize - 1)
-		d.sendBlock(blockInput{uid: d.uid, msg: p[:n]})
+		d.sendBlock(blockInput{uid: d.uid, msg: p[:n]}, len(p)-n < BlockSize)
 		p = p[n:]
 	}
 	if len(p) > 0 {
@@ -123,16 +123,30 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 		panic(fmt.Errorf("internal error: sum block was not aligned. len=%d, nx=%d", len(trail), d.nx))
 	}
 	sumCh := make(chan sumResult, 1)
-	d.sendBlock(blockInput{uid: d.uid, msg: trail, sumCh: sumCh})
+	d.sendBlock(blockInput{uid: d.uid, msg: trail, sumCh: sumCh}, true)
 
 	sum := <-sumCh
 
 	return append(in, sum.digest[:]...)
 }
 
-func (d *md5Digest) sendBlock(bi blockInput) {
+// sendBlock will send a block for processing.
+// If cycle is true we will block on cycle, otherwise we will only block
+// if the block channel is full.
+func (d *md5Digest) sendBlock(bi blockInput, cycle bool) {
+	if cycle {
+		select {
+		case d.blocksCh <- bi:
+			d.cycleServer <- d.uid
+		}
+		return
+	}
+	// Only block on cycle if we filled the buffer
 	select {
 	case d.blocksCh <- bi:
+		return
+	default:
 		d.cycleServer <- d.uid
+		d.blocksCh <- bi
 	}
 }
