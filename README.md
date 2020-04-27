@@ -85,7 +85,7 @@ The following chart compares the multi-core performance between `crypto/md5` vs 
 Compared to `crypto/md5`, the AVX2 version is up to 4x faster:
 
 ```
-benchcmp crypto-md5.txt avx2.txt 
+$ benchcmp crypto-md5.txt avx2.txt 
 benchmark                     old MB/s     new MB/s     speedup
 BenchmarkParallel/32KB-4      2229.40      5745.47      2.58x
 BenchmarkParallel/64KB-4      2233.49      6578.90      2.95x
