@@ -37,10 +37,6 @@ type blockInput struct {
 	reset bool
 }
 
-type blockProcessor struct {
-	bases [2][]byte // base memory (only for non-AVX512 mode)
-}
-
 type sumResult struct {
 	digest [Size]byte
 }
