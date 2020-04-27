@@ -136,8 +136,16 @@ func TestMultipleSums(t *testing.T) {
 
 	h.Write(bytes.Repeat([]byte{0x61}, 64))
 	digestMiddle1 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	digestMiddle1b := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	if digestMiddle1 != digestMiddle1b {
+		t.Errorf("TestMultipleSums<Middle1/1b>, got %s, want %s", digestMiddle1, digestMiddle1b)
+	}
 	h.Write(bytes.Repeat([]byte{0x62}, 64))
 	digestMiddle2 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	digestMiddle2b := fmt.Sprintf("%x", h.Sum(tmp[:0]))
+	if digestMiddle2 != digestMiddle2b {
+		t.Errorf("TestMultipleSums<Middle2/2b>, got %s, want %s", digestMiddle2, digestMiddle2b)
+	}
 	h.Write(bytes.Repeat([]byte{0x63}, 64))
 	digestFinal := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 
