@@ -72,7 +72,11 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		n := copy(d.x[d.nx:], p)
 		d.nx += n
 		if d.nx == BlockSize {
-			d.sendBlock(blockInput{uid: d.uid, msg: d.x[:]}, len(p)-n < BlockSize)
+			// Create a copy of the overflow buffer in order to send it async over the channel
+			// (since we will modify the overflow buffer down below with any access beyond multiples of 64)
+			tmp := [BlockSize]byte{}
+			copy(tmp[:], d.x[:])
+			d.sendBlock(blockInput{uid: d.uid, msg: tmp[:]}, len(p)-n < BlockSize)
 			d.nx = 0
 		}
 		p = p[n:]
