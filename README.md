@@ -87,31 +87,31 @@ Compared to `crypto/md5`, the AVX2 version is up to 4x faster:
 ```
 $ benchcmp crypto-md5.txt avx2.txt 
 benchmark                     old MB/s     new MB/s     speedup
-BenchmarkParallel/32KB-4      2229.40      5745.47      2.58x
-BenchmarkParallel/64KB-4      2233.49      6578.90      2.95x
-BenchmarkParallel/128KB-4     2235.64      7395.15      3.31x
-BenchmarkParallel/256KB-4     2237.07      8006.78      3.58x
-BenchmarkParallel/512KB-4     2237.42      8392.50      3.75x
-BenchmarkParallel/1MB-4       2232.63      8566.43      3.84x
-BenchmarkParallel/2MB-4       2205.05      8618.54      3.91x
-BenchmarkParallel/4MB-4       2205.85      8552.65      3.88x
-BenchmarkParallel/8MB-4       2152.75      8483.01      3.94x
+BenchmarkParallel/32KB-4      2229.22      7370.50      3.31x
+BenchmarkParallel/64KB-4      2233.61      8248.46      3.69x
+BenchmarkParallel/128KB-4     2235.43      8660.74      3.87x
+BenchmarkParallel/256KB-4     2236.39      8863.87      3.96x
+BenchmarkParallel/512KB-4     2238.05      8985.39      4.01x
+BenchmarkParallel/1MB-4       2233.56      9042.62      4.05x
+BenchmarkParallel/2MB-4       2224.11      9014.46      4.05x
+BenchmarkParallel/4MB-4       2199.78      8993.61      4.09x
+BenchmarkParallel/8MB-4       2182.48      8748.22      4.01x
 ```
 
-Compared to `crypto/md5`, the AVX512 is almost up to 8x faster (for larger block sizes):
+Compared to `crypto/md5`, the AVX512 is up to 8x faster (for larger block sizes):
 
 ```
 $ benchcmp crypto-md5.txt avx512.txt
 benchmark                     old MB/s     new MB/s     speedup
-BenchmarkParallel/32KB-4      2229.40       7320.85     3.28x
-BenchmarkParallel/64KB-4      2233.49       9491.57     4.25x
-BenchmarkParallel/128KB-4     2235.64      11616.18     5.20x
-BenchmarkParallel/256KB-4     2237.07      13291.86     5.94x
-BenchmarkParallel/512KB-4     2237.42      14539.31     6.50x
-BenchmarkParallel/1MB-4       2232.63      15464.00     6.93x
-BenchmarkParallel/2MB-4       2205.05      15943.54     7.23x
-BenchmarkParallel/4MB-4       2205.85      16021.47     7.26x
-BenchmarkParallel/8MB-4       2152.75      15919.35     7.39x
+BenchmarkParallel/32KB-4      2229.22      11605.78     5.21x
+BenchmarkParallel/64KB-4      2233.61      14329.65     6.42x
+BenchmarkParallel/128KB-4     2235.43      16166.39     7.23x
+BenchmarkParallel/256KB-4     2236.39      15570.09     6.96x
+BenchmarkParallel/512KB-4     2238.05      16705.83     7.46x
+BenchmarkParallel/1MB-4       2233.56      16941.95     7.59x
+BenchmarkParallel/2MB-4       2224.11      17136.01     7.70x
+BenchmarkParallel/4MB-4       2199.78      17218.61     7.83x
+BenchmarkParallel/8MB-4       2182.48      17252.88     7.91x
 ```
 
 These measurements were performed on AWS EC2 instance of type `c5.xlarge` equipped with a Xeon Platinum 8124M CPU at 3.0 GHz.
