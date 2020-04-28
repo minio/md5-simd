@@ -158,6 +158,23 @@ The `roll` macro (three instructions on AVX2) is no longer needed for AVX512 and
 
 Also several logical operations from the various ROUNDS of the AVX2 version could be combined into a single instruction using ternary logic (with the `VPTERMLOGD` instruction), resulting in a further simplification and speed-up.
 
+## Operation
+
+To make operation as easy as possible there is a “Server” coordinating everything. The server keeps track of individual hash states and updates them as new data comes in. This can be visualized as follows:
+
+![server-architecture](chart/server-architecture.png)
+
+The data is sent to the server from each hash input in blocks of up to 32KB per round. In our testing we found this to be the block size that yielded the best results.
+
+Whenever there is data available the server will collect data for up to 16 hashes and process all 16 lanes in parallel. This means that if 16 hashes have data available all the lanes will be filled. However since that may not be the case, the server will fill less lanes and do a round anyway. Lanes can also be partially filled if less than 32KB of data is written.
+
+![server-lanes-example](chart/server-lanes-example.png)
+
+In this example 4 lanes are fully filled and 2 lanes are partially filled. In this case the black areas will simply be masked out from the results and ignored. This is also why calculating a single hash on a server will not result in any speedup and hash writes should be a multiple of 32KB for the best performance.
+
+For AVX512 all 16 calculations will be done on a single core, on AVX2 on 2 cores if there is data for more than 8 lanes.
+So for optimal usage there should be data available for all 16 hashes. It may be perfectly reasonable to use more than 16 concurrent hashes.
+
 ## Low level block function performance
 
 The benchmark below shows the (single thread) maximum performance of the `block()` function for AVX2 (having 8 lanes) and AVX512 (having 16 lanes). Also the baseline single-core performance from the standard `crypto/md5` package is shown for comparison.
