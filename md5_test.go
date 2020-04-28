@@ -128,7 +128,7 @@ func TestGolangGolden16(t *testing.T) {
 	}
 }
 
-func testMultipleSums(t *testing.T, incr int) {
+func testMultipleSums(t *testing.T, incr, incr2 int) {
 
 	server := NewServer()
 	h := server.NewHash()
@@ -140,7 +140,7 @@ func testMultipleSums(t *testing.T, incr int) {
 	if digestMiddle1 != digestMiddle1b {
 		t.Errorf("TestMultipleSums<Middle1/1b>, got %s, want %s", digestMiddle1, digestMiddle1b)
 	}
-	h.Write(bytes.Repeat([]byte{0x62}, 64))
+	h.Write(bytes.Repeat([]byte{0x62}, 64 + incr2))
 	digestMiddle2 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	digestMiddle2b := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	if digestMiddle2 != digestMiddle2b {
@@ -157,7 +157,7 @@ func testMultipleSums(t *testing.T, incr int) {
 		t.Errorf("TestMultipleSums<Middle1>, got %s, want %s", digestMiddle1, digestCryptoMiddle1)
 	}
 
-	h2.Write(bytes.Repeat([]byte{0x62}, 64))
+	h2.Write(bytes.Repeat([]byte{0x62}, 64 + incr2))
 	digestCryptoMiddle2 := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
 
 	if digestMiddle2 != digestCryptoMiddle2 {
@@ -175,7 +175,9 @@ func testMultipleSums(t *testing.T, incr int) {
 func TestMultipleSums(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		for i := 0; i < 64*2; i++ {
-			testMultipleSums(t, i)
+			for j := 0; j < 64; j++ {
+				testMultipleSums(t, i, j)
+			}
 		}
 	})
 }
