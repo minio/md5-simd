@@ -116,6 +116,25 @@ BenchmarkParallel/8MB-4       2182.48      17252.88     7.91x
 
 These measurements were performed on AWS EC2 instance of type `c5.xlarge` equipped with a Xeon Platinum 8124M CPU at 3.0 GHz.
 
+
+## Operation
+
+To make operation as easy as possible there is a “Server” coordinating everything. The server keeps track of individual hash states and updates them as new data comes in. This can be visualized as follows:
+
+![server-architecture](chart/server-architecture.png)
+
+The data is sent to the server from each hash input in blocks of up to 32KB per round. In our testing we found this to be the block size that yielded the best results.
+
+Whenever there is data available the server will collect data for up to 16 hashes and process all 16 lanes in parallel. This means that if 16 hashes have data available all the lanes will be filled. However since that may not be the case, the server will fill less lanes and do a round anyway. Lanes can also be partially filled if less than 32KB of data is written.
+
+![server-lanes-example](chart/server-lanes-example.png)
+
+In this example 4 lanes are fully filled and 2 lanes are partially filled. In this case the black areas will simply be masked out from the results and ignored. This is also why calculating a single hash on a server will not result in any speedup and hash writes should be a multiple of 32KB for the best performance.
+
+For AVX512 all 16 calculations will be done on a single core, on AVX2 on 2 cores if there is data for more than 8 lanes.
+So for optimal usage there should be data available for all 16 hashes. It may be perfectly reasonable to use more than 16 concurrent hashes.
+
+
 ## Design & Tech
 
 md5-simd has both an AVX2 (8-lane parallel), and an AVX512 (16-lane parallel version) algorithm to accelerate the computation with the following function definitions:
@@ -157,23 +176,6 @@ For this a 16-bit mask is passed in the AVX512 assembly code which is used durin
 The `roll` macro (three instructions on AVX2) is no longer needed for AVX512 and is replaced by a single `VPROLD` instruction.
 
 Also several logical operations from the various ROUNDS of the AVX2 version could be combined into a single instruction using ternary logic (with the `VPTERMLOGD` instruction), resulting in a further simplification and speed-up.
-
-## Operation
-
-To make operation as easy as possible there is a “Server” coordinating everything. The server keeps track of individual hash states and updates them as new data comes in. This can be visualized as follows:
-
-![server-architecture](chart/server-architecture.png)
-
-The data is sent to the server from each hash input in blocks of up to 32KB per round. In our testing we found this to be the block size that yielded the best results.
-
-Whenever there is data available the server will collect data for up to 16 hashes and process all 16 lanes in parallel. This means that if 16 hashes have data available all the lanes will be filled. However since that may not be the case, the server will fill less lanes and do a round anyway. Lanes can also be partially filled if less than 32KB of data is written.
-
-![server-lanes-example](chart/server-lanes-example.png)
-
-In this example 4 lanes are fully filled and 2 lanes are partially filled. In this case the black areas will simply be masked out from the results and ignored. This is also why calculating a single hash on a server will not result in any speedup and hash writes should be a multiple of 32KB for the best performance.
-
-For AVX512 all 16 calculations will be done on a single core, on AVX2 on 2 cores if there is data for more than 8 lanes.
-So for optimal usage there should be data available for all 16 hashes. It may be perfectly reasonable to use more than 16 concurrent hashes.
 
 ## Low level block function performance
 
