@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/klauspost/cpuid"
 )
@@ -55,6 +56,10 @@ type md5Server struct {
 	bases        [2][]byte             // base memory (only for non-AVX512 mode)
 }
 
+var blockPool = sync.Pool{New: func() interface{} {
+	return make([]byte, 0, internalBlockSize)
+}}
+
 // NewServer - Create new object for parallel processing handling
 func NewServer() Server {
 	if !cpuid.CPU.AVX2() {
@@ -87,10 +92,7 @@ func (s *md5Server) process(newClients chan newClient) {
 	//
 	// 1. Wait for a cycle id.
 	// 2. If not already in a lane, add, otherwise leave on channel
-	// 3. Start timer
 	// 4. Check if lanes is full, if so, goto 10 (process).
-	// 5. If timeout, goto 10.
-	// 6. Wait for new id (goto 2)  or timeout (goto 10).
 	// 10. Process.
 	// 11. Check all input if there is already input, if so add to lanes.
 	// 12. Goto 1
@@ -273,6 +275,9 @@ func (s *md5Server) blocks(lanes []blockInput) {
 		binary.LittleEndian.PutUint32(dig[12:], state.v3[i])
 
 		s.digests[uid] = dig
+		if lane.msg != nil {
+			blockPool.Put(lane.msg)
+		}
 		lanes[i] = blockInput{}
 	}
 }

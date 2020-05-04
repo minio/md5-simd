@@ -65,7 +65,6 @@ func (d *md5Digest) Write(p []byte) (nn int, err error) {
 }
 
 func (d *md5Digest) write(p []byte) (nn int, err error) {
-
 	nn = len(p)
 	d.len += uint64(nn)
 	if d.nx > 0 {
@@ -74,16 +73,18 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		if d.nx == BlockSize {
 			// Create a copy of the overflow buffer in order to send it async over the channel
 			// (since we will modify the overflow buffer down below with any access beyond multiples of 64)
-			tmp := [BlockSize]byte{}
-			copy(tmp[:], d.x[:])
-			d.sendBlock(blockInput{uid: d.uid, msg: tmp[:]}, len(p)-n < BlockSize)
+			tmp := blockPool.New().([]byte)[:BlockSize]
+			copy(tmp, d.x[:])
+			d.sendBlock(blockInput{uid: d.uid, msg: tmp}, len(p)-n < BlockSize)
 			d.nx = 0
 		}
 		p = p[n:]
 	}
 	if len(p) >= BlockSize {
 		n := len(p) &^ (BlockSize - 1)
-		d.sendBlock(blockInput{uid: d.uid, msg: p[:n]}, len(p)-n < BlockSize)
+		blk := blockPool.New().([]byte)[:n]
+		copy(blk, p[:n])
+		d.sendBlock(blockInput{uid: d.uid, msg: blk}, len(p)-n < BlockSize)
 		p = p[n:]
 	}
 	if len(p) > 0 {
@@ -105,7 +106,7 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 		panic("sum after close")
 	}
 
-	trail := make([]byte, 0, 128)
+	trail := blockPool.New().([]byte)[:0]
 	trail = append(trail, d.x[:d.nx]...)
 
 	length := d.len
