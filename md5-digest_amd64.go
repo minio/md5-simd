@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync/atomic"
 )
 
 // md5Digest - Type for computing MD5 using either AVX2 or AVX512
@@ -20,6 +21,28 @@ type md5Digest struct {
 	x           [BlockSize]byte
 	nx          int
 	len         uint64
+	buffers     chan []byte
+}
+
+// NewHash - initialize instance for Md5 implementation.
+func (s *md5Server) NewHash() Hasher {
+	uid := atomic.AddUint64(&s.uidCounter, 1)
+	const blocks = 3
+	blockCh := make(chan blockInput, blocks)
+	s.newInput <- newClient{
+		uid:   uid,
+		input: blockCh,
+	}
+	bufferCh := make(chan []byte, blocks)
+	for i := 0; i < blocks; i++ {
+		bufferCh <- make([]byte, 0, internalBlockSize)
+	}
+	return &md5Digest{
+		uid:         uid,
+		buffers:     bufferCh,
+		blocksCh:    blockCh,
+		cycleServer: s.cycle,
+	}
 }
 
 // Size - Return size of checksum
@@ -83,7 +106,10 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 	}
 	if len(p) >= BlockSize {
 		n := len(p) &^ (BlockSize - 1)
-		d.sendBlock(blockInput{uid: d.uid, msg: p[:n]}, len(p)-n < BlockSize)
+		buf := <-d.buffers
+		buf = buf[:n]
+		copy(buf, p)
+		d.sendBlock(blockInput{uid: d.uid, msg: buf, bufCh: d.buffers}, len(p)-n < BlockSize)
 		p = p[n:]
 	}
 	if len(p) > 0 {

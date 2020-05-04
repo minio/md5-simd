@@ -34,6 +34,7 @@ type blockInput struct {
 	uid   uint64
 	msg   []byte
 	sumCh chan sumResult
+	bufCh chan []byte
 	reset bool
 }
 
@@ -273,6 +274,9 @@ func (s *md5Server) blocks(lanes []blockInput) {
 		binary.LittleEndian.PutUint32(dig[12:], state.v3[i])
 
 		s.digests[uid] = dig
+		if lane.bufCh != nil {
+			lane.bufCh <- lane.msg
+		}
 		lanes[i] = blockInput{}
 	}
 }
