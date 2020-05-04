@@ -12,6 +12,7 @@ import (
 	"hash"
 	"io"
 	"math/rand"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -134,13 +135,13 @@ func testMultipleSums(t *testing.T, incr, incr2 int) {
 	h := server.NewHash()
 	var tmp [Size]byte
 
-	h.Write(bytes.Repeat([]byte{0x61}, 64 + incr))
+	h.Write(bytes.Repeat([]byte{0x61}, 64+incr))
 	digestMiddle1 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	digestMiddle1b := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	if digestMiddle1 != digestMiddle1b {
 		t.Errorf("TestMultipleSums<Middle1/1b>, got %s, want %s", digestMiddle1, digestMiddle1b)
 	}
-	h.Write(bytes.Repeat([]byte{0x62}, 64 + incr2))
+	h.Write(bytes.Repeat([]byte{0x62}, 64+incr2))
 	digestMiddle2 := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	digestMiddle2b := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 	if digestMiddle2 != digestMiddle2b {
@@ -150,14 +151,14 @@ func testMultipleSums(t *testing.T, incr, incr2 int) {
 	digestFinal := fmt.Sprintf("%x", h.Sum(tmp[:0]))
 
 	h2 := md5.New()
-	h2.Write(bytes.Repeat([]byte{0x61}, 64 + incr))
+	h2.Write(bytes.Repeat([]byte{0x61}, 64+incr))
 	digestCryptoMiddle1 := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
 
 	if digestMiddle1 != digestCryptoMiddle1 {
 		t.Errorf("TestMultipleSums<Middle1>, got %s, want %s", digestMiddle1, digestCryptoMiddle1)
 	}
 
-	h2.Write(bytes.Repeat([]byte{0x62}, 64 + incr2))
+	h2.Write(bytes.Repeat([]byte{0x62}, 64+incr2))
 	digestCryptoMiddle2 := fmt.Sprintf("%x", h2.Sum(tmp[:0]))
 
 	if digestMiddle2 != digestCryptoMiddle2 {
@@ -223,17 +224,59 @@ func TestMd5Simulator(t *testing.T) {
 	}
 
 	server := NewServer()
-	defer server.Close()
-
 	t.Run("c16", func(t *testing.T) {
+		t.Parallel()
 		testMd5Simulator(t, 16, iterations/10, 20<<20, server)
 	})
 	t.Run("c1", func(t *testing.T) {
+		t.Parallel()
 		testMd5Simulator(t, 1, iterations, 5<<20, server)
 	})
 	t.Run("c19", func(t *testing.T) {
+		t.Parallel()
 		testMd5Simulator(t, 19, iterations*10, 100<<10, server)
 	})
+	t.Cleanup(server.Close)
+}
+
+// TestRandomInput tests a number of random inputs.
+func TestRandomInput(t *testing.T) {
+	n := 10000
+	if testing.Short() {
+		n = 100
+	}
+	conc := runtime.GOMAXPROCS(0)
+	server := NewServer()
+	for c := 0; c < conc; c++ {
+		t.Run(fmt.Sprint("routine-", c), func(t *testing.T) {
+			rng := rand.New(rand.NewSource(0xabad1dea + int64(c)))
+			testBuffer := make([]byte, 0, 10<<20)
+			t.Parallel()
+			for i := 0; i < n; i++ {
+				testBuffer = testBuffer[:rng.Intn(cap(testBuffer))]
+				rng.Read(testBuffer)
+				wantMD5 := md5.Sum(testBuffer)
+				h := server.NewHash()
+				for len(testBuffer) > 0 {
+					wrLen := rng.Intn(len(testBuffer) + 1)
+					n, err := h.Write(testBuffer[:wrLen])
+					if err != nil {
+						t.Fatal(err)
+					}
+					if n != wrLen {
+						t.Fatalf("write mismatch, want %d, got %d", wrLen, n)
+					}
+					testBuffer = testBuffer[n:]
+				}
+				got := h.Sum(nil)
+				if !bytes.Equal(wantMD5[:], got) {
+					t.Fatalf("mismatch, want %v, got %v", wantMD5[:], got)
+				}
+				h.Close()
+			}
+		})
+	}
+	t.Cleanup(server.Close)
 }
 
 func benchmarkCryptoMd5(b *testing.B, blockSize int) {
