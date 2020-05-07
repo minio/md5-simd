@@ -95,7 +95,9 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 		for i := range d8a.v0 {
 			j := i + 8
 			d8a.v0[i], d8a.v1[i], d8a.v2[i], d8a.v3[i] = d.v0[i], d.v1[i], d.v2[i], d.v3[i]
-			d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i] = d.v0[j], d.v1[j], d.v2[j], d.v3[j]
+			if !half {
+				d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i] = d.v0[j], d.v1[j], d.v2[j], d.v3[j]
+			}
 		}
 
 		i8 := [2][8][]byte{}
@@ -115,7 +117,9 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 		for i := range d8a.v0 {
 			j := i + 8
 			d.v0[i], d.v1[i], d.v2[i], d.v3[i] = d8a.v0[i], d8a.v1[i], d8a.v2[i], d8a.v3[i]
-			d.v0[j], d.v1[j], d.v2[j], d.v3[j] = d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i]
+			if !half {
+				d.v0[j], d.v1[j], d.v2[j], d.v3[j] = d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i]
+			}
 		}
 	}
 }

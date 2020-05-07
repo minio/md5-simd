@@ -29,7 +29,7 @@ const (
 // differentiate with default initialisation value of 0
 const md5ServerUID = Lanes
 
-const buffersPerLane = 5
+const buffersPerLane = 3
 
 // Message to send across input channel
 type blockInput struct {
