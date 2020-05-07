@@ -130,8 +130,9 @@ func TestGolangGolden16(t *testing.T) {
 }
 
 func testMultipleSums(t *testing.T, incr, incr2 int) {
-
 	server := NewServer()
+	defer server.Close()
+
 	h := server.NewHash()
 	var tmp [Size]byte
 
@@ -225,15 +226,12 @@ func TestMd5Simulator(t *testing.T) {
 
 	server := NewServer()
 	t.Run("c16", func(t *testing.T) {
-		t.Parallel()
 		testMd5Simulator(t, 16, iterations/10, 20<<20, server)
 	})
 	t.Run("c1", func(t *testing.T) {
-		t.Parallel()
 		testMd5Simulator(t, 1, iterations, 5<<20, server)
 	})
 	t.Run("c19", func(t *testing.T) {
-		t.Parallel()
 		testMd5Simulator(t, 19, iterations*10, 100<<10, server)
 	})
 	t.Cleanup(server.Close)
