@@ -103,12 +103,12 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 			i8[0][i], i8[1][i] = input[i], input[8+i]
 		}
 		if half {
-			blockMd5_avx2(&d8a, i8[0], s.bases[0], &s.maskRounds8a)
+			blockMd5_avx2(&d8a, i8[0], s.allBufs, &s.maskRounds8a)
 		} else {
 			wg := sync.WaitGroup{}
 			wg.Add(2)
-			go func() { blockMd5_avx2(&d8a, i8[0], s.bases[0], &s.maskRounds8a); wg.Done() }()
-			go func() { blockMd5_avx2(&d8b, i8[1], s.bases[1], &s.maskRounds8b); wg.Done() }()
+			go func() { blockMd5_avx2(&d8a, i8[0], s.allBufs, &s.maskRounds8a); wg.Done() }()
+			go func() { blockMd5_avx2(&d8b, i8[1], s.allBufs, &s.maskRounds8b); wg.Done() }()
 			wg.Wait()
 		}
 
@@ -122,20 +122,12 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 
 // Interface function to AVX512 assembly code
 func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) {
-
-	// Sanity check to make sure we're not passing in more data than internalBlockSize
-	{
-		for i := 1; i < len(input); i++ {
+	ptrs := [16]int64{}
+	for i := range ptrs {
+		if input[i] != nil {
 			if len(input[i]) > internalBlockSize {
 				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
 			}
-		}
-	}
-
-	ptrs := [16]int64{}
-
-	for i := range ptrs {
-		if input[i] != nil {
 			ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
 		}
 	}
@@ -160,37 +152,20 @@ func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) 
 
 // Interface function to AVX2 assembly code
 func blockMd5_avx2(s *digest8, input [8][]byte, base []byte, maskRounds *[8]maskRounds) {
-
-	// Sanity check to make sure we're not passing in more data than internalBlockSize
-	{
-		for i := 1; i < len(input); i++ {
-			if len(input[i]) > internalBlockSize {
-				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
-			}
-		}
-	}
-
-	baseMin, baseMax := uint64(math.MaxUint64), uint64(0)
-	for i := range input {
-		if input[i] != nil {
-			if baseMin > uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - 4 {
-				baseMin = uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - 4
-			}
-			if baseMax < uint64(uintptr(unsafe.Pointer(&(input[i][len(input[i])-1])))) {
-				baseMax = uint64(uintptr(unsafe.Pointer(&(input[i][len(input[i])-1]))))
-			}
-		}
-	}
-
-	if baseMax - baseMin >= 1 << 31 {
-		panic("Pointers outside 2 GB address space")
-	}
-
+	baseMin := uint64(uintptr(unsafe.Pointer(&(base[0])))) - 4
 	ptrs := [8]int32{}
 
 	for i := range ptrs {
-		if input[i] != nil {
-			ptrs[i] = int32(uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - baseMin)
+		if len(input[i]) > 0 {
+			if len(input[i]) > internalBlockSize {
+				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
+			}
+
+			off := uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - baseMin
+			if off > math.MaxUint32 {
+				panic(fmt.Sprintf("invalid buffer sent with offset %x", off))
+			}
+			ptrs[i] = int32(off)
 		}
 	}
 

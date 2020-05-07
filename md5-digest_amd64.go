@@ -21,25 +21,20 @@ type md5Digest struct {
 	x           [BlockSize]byte
 	nx          int
 	len         uint64
-	buffers     chan []byte
+	buffers     <-chan []byte
 }
 
 // NewHash - initialize instance for Md5 implementation.
 func (s *md5Server) NewHash() Hasher {
 	uid := atomic.AddUint64(&s.uidCounter, 1)
-	const blocks = 3
-	blockCh := make(chan blockInput, blocks)
+	blockCh := make(chan blockInput, buffersPerLane)
 	s.newInput <- newClient{
 		uid:   uid,
 		input: blockCh,
 	}
-	bufferCh := make(chan []byte, blocks)
-	for i := 0; i < blocks; i++ {
-		bufferCh <- make([]byte, 0, internalBlockSize)
-	}
 	return &md5Digest{
 		uid:         uid,
-		buffers:     bufferCh,
+		buffers:     s.buffers,
 		blocksCh:    blockCh,
 		cycleServer: s.cycle,
 	}
@@ -97,9 +92,10 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		if d.nx == BlockSize {
 			// Create a copy of the overflow buffer in order to send it async over the channel
 			// (since we will modify the overflow buffer down below with any access beyond multiples of 64)
-			tmp := [BlockSize]byte{}
-			copy(tmp[:], d.x[:])
-			d.sendBlock(blockInput{uid: d.uid, msg: tmp[:]}, len(p)-n < BlockSize)
+			tmp := <-d.buffers
+			tmp = tmp[:BlockSize]
+			copy(tmp, d.x[:])
+			d.sendBlock(blockInput{uid: d.uid, msg: tmp}, len(p)-n < BlockSize)
 			d.nx = 0
 		}
 		p = p[n:]
@@ -109,7 +105,7 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		buf := <-d.buffers
 		buf = buf[:n]
 		copy(buf, p)
-		d.sendBlock(blockInput{uid: d.uid, msg: buf, bufCh: d.buffers}, len(p)-n < BlockSize)
+		d.sendBlock(blockInput{uid: d.uid, msg: buf}, len(p)-n < BlockSize)
 		p = p[n:]
 	}
 	if len(p) > 0 {
@@ -131,8 +127,8 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 		panic("sum after close")
 	}
 
-	trail := make([]byte, 0, 128)
-	trail = append(trail, d.x[:d.nx]...)
+	trail := <-d.buffers
+	trail = append(trail[:0], d.x[:d.nx]...)
 
 	length := d.len
 	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
