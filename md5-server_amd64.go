@@ -29,6 +29,8 @@ const (
 // differentiate with default initialisation value of 0
 const md5ServerUID = Lanes
 
+const buffersPerLane = 3
+
 // Message to send across input channel
 type blockInput struct {
 	uid   uint64
@@ -52,7 +54,8 @@ type md5Server struct {
 	maskRounds16 [16]maskRounds        // Pre-allocated static array for max 16 rounds
 	maskRounds8a [8]maskRounds         // Pre-allocated static array for max 8 rounds (1st AVX2 core)
 	maskRounds8b [8]maskRounds         // Pre-allocated static array for max 8 rounds (2nd AVX2 core)
-	bases        [2][]byte             // base memory (only for non-AVX512 mode)
+	allBufs      []byte                // Preallocated buffer.
+	buffers      chan []byte           // Preallocated buffers, sliced from allBufs.
 }
 
 // NewServer - Create new object for parallel processing handling
@@ -65,10 +68,12 @@ func NewServer() Server {
 	md5srv.newInput = make(chan newClient, Lanes)
 	md5srv.cycle = make(chan uint64, Lanes*10)
 	md5srv.uidCounter = md5ServerUID - 1
-	if !hasAVX512 {
-		// only reserve memory when not on AVX512
-		md5srv.bases[0] = make([]byte, 4+8*internalBlockSize)
-		md5srv.bases[1] = make([]byte, 4+8*internalBlockSize)
+	md5srv.allBufs = make([]byte, 32+buffersPerLane*Lanes*internalBlockSize)
+	md5srv.buffers = make(chan []byte, buffersPerLane*Lanes)
+	// Fill buffers.
+	for i := 0; i < buffersPerLane*Lanes; i++ {
+		s := 32 + i*internalBlockSize
+		md5srv.buffers <- md5srv.allBufs[s : s+internalBlockSize : s+internalBlockSize]
 	}
 
 	// Start a single thread for reading from the input channel
@@ -154,6 +159,9 @@ func (s *md5Server) process(newClients chan newClient) {
 					binary.LittleEndian.PutUint32(sum.digest[8:], dig.s[2])
 					binary.LittleEndian.PutUint32(sum.digest[12:], dig.s[3])
 					block.sumCh <- sum
+					if block.msg != nil {
+						s.buffers <- block.msg
+					}
 					continue
 				}
 				if len(block.msg) == 0 {
@@ -273,6 +281,9 @@ func (s *md5Server) blocks(lanes []blockInput) {
 		binary.LittleEndian.PutUint32(dig[12:], state.v3[i])
 
 		s.digests[uid] = dig
+		if lane.msg != nil {
+			s.buffers <- lane.msg
+		}
 		lanes[i] = blockInput{}
 	}
 }

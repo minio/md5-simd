@@ -130,8 +130,9 @@ func TestGolangGolden16(t *testing.T) {
 }
 
 func testMultipleSums(t *testing.T, incr, incr2 int) {
-
 	server := NewServer()
+	defer server.Close()
+
 	h := server.NewHash()
 	var tmp [Size]byte
 
@@ -218,65 +219,78 @@ func testMd5Simulator(t *testing.T, concurrency, iterations, maxSize int, server
 }
 
 func TestMd5Simulator(t *testing.T) {
-	iterations := 200
+	iterations := 400
 	if testing.Short() {
-		iterations = 20
+		iterations = 40
 	}
 
-	server := NewServer()
 	t.Run("c16", func(t *testing.T) {
+		server := NewServer()
+		t.Cleanup(server.Close)
 		t.Parallel()
 		testMd5Simulator(t, 16, iterations/10, 20<<20, server)
 	})
 	t.Run("c1", func(t *testing.T) {
+		server := NewServer()
+		t.Cleanup(server.Close)
 		t.Parallel()
 		testMd5Simulator(t, 1, iterations, 5<<20, server)
 	})
 	t.Run("c19", func(t *testing.T) {
+		server := NewServer()
+		t.Cleanup(server.Close)
 		t.Parallel()
-		testMd5Simulator(t, 19, iterations*10, 100<<10, server)
+		testMd5Simulator(t, 19, iterations*2, 100<<10, server)
 	})
-	t.Cleanup(server.Close)
 }
 
 // TestRandomInput tests a number of random inputs.
 func TestRandomInput(t *testing.T) {
-	n := 10000
+	n := 500
 	if testing.Short() {
 		n = 100
 	}
 	conc := runtime.GOMAXPROCS(0)
-	server := NewServer()
 	for c := 0; c < conc; c++ {
 		t.Run(fmt.Sprint("routine-", c), func(t *testing.T) {
-			rng := rand.New(rand.NewSource(0xabad1dea + int64(c)))
-			testBuffer := make([]byte, 0, 10<<20)
-			t.Parallel()
+			server := NewServer()
+			t.Cleanup(server.Close)
 			for i := 0; i < n; i++ {
-				testBuffer = testBuffer[:rng.Intn(cap(testBuffer))]
-				rng.Read(testBuffer)
-				wantMD5 := md5.Sum(testBuffer)
-				h := server.NewHash()
-				for len(testBuffer) > 0 {
-					wrLen := rng.Intn(len(testBuffer) + 1)
-					n, err := h.Write(testBuffer[:wrLen])
-					if err != nil {
-						t.Fatal(err)
+				rng := rand.New(rand.NewSource(0xabad1dea + int64(c*n+i)))
+				// Up to 1 MB
+				length := rng.Intn(1 << 20)
+				baseBuf := make([]byte, length)
+
+				t.Run(fmt.Sprint("hash-", i), func(t *testing.T) {
+					t.Parallel()
+					testBuffer := baseBuf
+					rng.Read(testBuffer)
+					wantMD5 := md5.Sum(testBuffer)
+					h := server.NewHash()
+					for len(testBuffer) > 0 {
+						wrLen := rng.Intn(len(testBuffer) + 1)
+						n, err := h.Write(testBuffer[:wrLen])
+						if err != nil {
+							t.Fatal(err)
+						}
+						if n != wrLen {
+							t.Fatalf("write mismatch, want %d, got %d", wrLen, n)
+						}
+						testBuffer = testBuffer[n:]
+						if len(testBuffer) == 0 {
+							// Test if we can use the buffer without races.
+							rng.Read(baseBuf)
+						}
 					}
-					if n != wrLen {
-						t.Fatalf("write mismatch, want %d, got %d", wrLen, n)
+					got := h.Sum(nil)
+					if !bytes.Equal(wantMD5[:], got) {
+						t.Fatalf("mismatch, want %v, got %v", wantMD5[:], got)
 					}
-					testBuffer = testBuffer[n:]
-				}
-				got := h.Sum(nil)
-				if !bytes.Equal(wantMD5[:], got) {
-					t.Fatalf("mismatch, want %v, got %v", wantMD5[:], got)
-				}
-				h.Close()
+					h.Close()
+				})
 			}
 		})
 	}
-	t.Cleanup(server.Close)
 }
 
 func benchmarkCryptoMd5(b *testing.B, blockSize int) {

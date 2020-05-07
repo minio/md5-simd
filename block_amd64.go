@@ -8,8 +8,8 @@ package md5simd
 
 import (
 	"fmt"
+	"math"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
 	"github.com/klauspost/cpuid"
@@ -22,20 +22,6 @@ func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 
 //go:noescape
 func block16(state *uint32, ptrs *int64, mask uint64, n int)
-
-// NewHash - initialize instance for Md5 implementation.
-func (s *md5Server) NewHash() Hasher {
-	uid := atomic.AddUint64(&s.uidCounter, 1)
-	blockCh := make(chan blockInput, 5)
-	s.newInput <- newClient{
-		uid:   uid,
-		input: blockCh,
-	}
-	return &md5Digest{
-		uid: uid, blocksCh: blockCh,
-		cycleServer: s.cycle,
-	}
-}
 
 // 8-way 4x uint32 digests in 4 ymm registers
 // (ymm0, ymm1, ymm2, ymm3)
@@ -109,7 +95,9 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 		for i := range d8a.v0 {
 			j := i + 8
 			d8a.v0[i], d8a.v1[i], d8a.v2[i], d8a.v3[i] = d.v0[i], d.v1[i], d.v2[i], d.v3[i]
-			d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i] = d.v0[j], d.v1[j], d.v2[j], d.v3[j]
+			if !half {
+				d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i] = d.v0[j], d.v1[j], d.v2[j], d.v3[j]
+			}
 		}
 
 		i8 := [2][8][]byte{}
@@ -117,39 +105,33 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 			i8[0][i], i8[1][i] = input[i], input[8+i]
 		}
 		if half {
-			blockMd5_avx2(&d8a, i8[0], s.bases[0], &s.maskRounds8a)
+			blockMd5_avx2(&d8a, i8[0], s.allBufs, &s.maskRounds8a)
 		} else {
 			wg := sync.WaitGroup{}
 			wg.Add(2)
-			go func() { blockMd5_avx2(&d8a, i8[0], s.bases[0], &s.maskRounds8a); wg.Done() }()
-			go func() { blockMd5_avx2(&d8b, i8[1], s.bases[1], &s.maskRounds8b); wg.Done() }()
+			go func() { blockMd5_avx2(&d8a, i8[0], s.allBufs, &s.maskRounds8a); wg.Done() }()
+			go func() { blockMd5_avx2(&d8b, i8[1], s.allBufs, &s.maskRounds8b); wg.Done() }()
 			wg.Wait()
 		}
 
 		for i := range d8a.v0 {
 			j := i + 8
 			d.v0[i], d.v1[i], d.v2[i], d.v3[i] = d8a.v0[i], d8a.v1[i], d8a.v2[i], d8a.v3[i]
-			d.v0[j], d.v1[j], d.v2[j], d.v3[j] = d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i]
+			if !half {
+				d.v0[j], d.v1[j], d.v2[j], d.v3[j] = d8b.v0[i], d8b.v1[i], d8b.v2[i], d8b.v3[i]
+			}
 		}
 	}
 }
 
 // Interface function to AVX512 assembly code
 func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) {
-
-	// Sanity check to make sure we're not passing in more data than internalBlockSize
-	{
-		for i := 1; i < len(input); i++ {
+	ptrs := [16]int64{}
+	for i := range ptrs {
+		if input[i] != nil {
 			if len(input[i]) > internalBlockSize {
 				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
 			}
-		}
-	}
-
-	ptrs := [16]int64{}
-
-	for i := range ptrs {
-		if input[i] != nil {
 			ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
 		}
 	}
@@ -174,20 +156,21 @@ func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) 
 
 // Interface function to AVX2 assembly code
 func blockMd5_avx2(s *digest8, input [8][]byte, base []byte, maskRounds *[8]maskRounds) {
+	baseMin := uint64(uintptr(unsafe.Pointer(&(base[0])))) - 4
+	ptrs := [8]int32{}
 
-	// Sanity check to make sure we're not passing in more data than internalBlockSize
-	{
-		for i := 1; i < len(input); i++ {
+	for i := range ptrs {
+		if len(input[i]) > 0 {
 			if len(input[i]) > internalBlockSize {
 				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
 			}
+
+			off := uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - baseMin
+			if off > math.MaxUint32 {
+				panic(fmt.Sprintf("invalid buffer sent with offset %x", off))
+			}
+			ptrs[i] = int32(off)
 		}
-	}
-
-	bufs := [8]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7}
-
-	for i := 0; i < len(input); i++ {
-		copy(base[bufs[i]:], input[i])
 	}
 
 	sdup := *s // create copy of initial states to receive intermediate updates
@@ -197,10 +180,10 @@ func blockMd5_avx2(s *digest8, input [8][]byte, base []byte, maskRounds *[8]mask
 	for r := 0; r < rounds; r++ {
 		m := maskRounds[r]
 		var cache cache8 // stack storage for block8 tmp state
-		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
+		block8(&sdup.v0[0], uintptr(baseMin), &ptrs[0], &cache[0], int(64*m.rounds))
 
-		for j := 0; j < len(bufs); j++ {
-			bufs[j] += int32(64 * m.rounds) // update pointers for next round
+		for j := 0; j < len(ptrs); j++ {
+			ptrs[j] += int32(64 * m.rounds) // update pointers for next round
 			if m.mask&(1<<j) != 0 {         // update digest if still masked as active
 				(*s).v0[j], (*s).v1[j], (*s).v2[j], (*s).v3[j] = sdup.v0[j], sdup.v1[j], sdup.v2[j], sdup.v3[j]
 			}

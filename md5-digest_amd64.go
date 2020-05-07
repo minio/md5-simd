@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync/atomic"
 )
 
 // md5Digest - Type for computing MD5 using either AVX2 or AVX512
@@ -20,6 +21,23 @@ type md5Digest struct {
 	x           [BlockSize]byte
 	nx          int
 	len         uint64
+	buffers     <-chan []byte
+}
+
+// NewHash - initialize instance for Md5 implementation.
+func (s *md5Server) NewHash() Hasher {
+	uid := atomic.AddUint64(&s.uidCounter, 1)
+	blockCh := make(chan blockInput, buffersPerLane)
+	s.newInput <- newClient{
+		uid:   uid,
+		input: blockCh,
+	}
+	return &md5Digest{
+		uid:         uid,
+		buffers:     s.buffers,
+		blocksCh:    blockCh,
+		cycleServer: s.cycle,
+	}
 }
 
 // Size - Return size of checksum
@@ -74,16 +92,20 @@ func (d *md5Digest) write(p []byte) (nn int, err error) {
 		if d.nx == BlockSize {
 			// Create a copy of the overflow buffer in order to send it async over the channel
 			// (since we will modify the overflow buffer down below with any access beyond multiples of 64)
-			tmp := [BlockSize]byte{}
-			copy(tmp[:], d.x[:])
-			d.sendBlock(blockInput{uid: d.uid, msg: tmp[:]}, len(p)-n < BlockSize)
+			tmp := <-d.buffers
+			tmp = tmp[:BlockSize]
+			copy(tmp, d.x[:])
+			d.sendBlock(blockInput{uid: d.uid, msg: tmp}, len(p)-n < BlockSize)
 			d.nx = 0
 		}
 		p = p[n:]
 	}
 	if len(p) >= BlockSize {
 		n := len(p) &^ (BlockSize - 1)
-		d.sendBlock(blockInput{uid: d.uid, msg: p[:n]}, len(p)-n < BlockSize)
+		buf := <-d.buffers
+		buf = buf[:n]
+		copy(buf, p)
+		d.sendBlock(blockInput{uid: d.uid, msg: buf}, len(p)-n < BlockSize)
 		p = p[n:]
 	}
 	if len(p) > 0 {
@@ -105,8 +127,8 @@ func (d *md5Digest) Sum(in []byte) (result []byte) {
 		panic("sum after close")
 	}
 
-	trail := make([]byte, 0, 128)
-	trail = append(trail, d.x[:d.nx]...)
+	trail := <-d.buffers
+	trail = append(trail[:0], d.x[:d.nx]...)
 
 	length := d.len
 	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
