@@ -219,22 +219,29 @@ func testMd5Simulator(t *testing.T, concurrency, iterations, maxSize int, server
 }
 
 func TestMd5Simulator(t *testing.T) {
-	iterations := 200
+	iterations := 400
 	if testing.Short() {
-		iterations = 20
+		iterations = 40
 	}
 
-	server := NewServer()
 	t.Run("c16", func(t *testing.T) {
+		server := NewServer()
+		t.Cleanup(server.Close)
+		t.Parallel()
 		testMd5Simulator(t, 16, iterations/10, 20<<20, server)
 	})
 	t.Run("c1", func(t *testing.T) {
+		server := NewServer()
+		t.Cleanup(server.Close)
+		t.Parallel()
 		testMd5Simulator(t, 1, iterations, 5<<20, server)
 	})
 	t.Run("c19", func(t *testing.T) {
-		testMd5Simulator(t, 19, iterations*10, 100<<10, server)
+		server := NewServer()
+		t.Cleanup(server.Close)
+		t.Parallel()
+		testMd5Simulator(t, 19, iterations*2, 100<<10, server)
 	})
-	t.Cleanup(server.Close)
 }
 
 // TestRandomInput tests a number of random inputs.
