@@ -8,6 +8,7 @@ package md5simd
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"unsafe"
 
@@ -169,10 +170,28 @@ func blockMd5_avx2(s *digest8, input [8][]byte, base []byte, maskRounds *[8]mask
 		}
 	}
 
-	bufs := [8]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7}
+	baseMin, baseMax := uint64(math.MaxUint64), uint64(0)
+	for i := range input {
+		if input[i] != nil {
+			if baseMin > uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - 4 {
+				baseMin = uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - 4
+			}
+			if baseMax < uint64(uintptr(unsafe.Pointer(&(input[i][len(input[i])-1])))) {
+				baseMax = uint64(uintptr(unsafe.Pointer(&(input[i][len(input[i])-1]))))
+			}
+		}
+	}
 
-	for i := 0; i < len(input); i++ {
-		copy(base[bufs[i]:], input[i])
+	if baseMax - baseMin >= 1 << 31 {
+		panic("Pointers outside 2 GB address space")
+	}
+
+	ptrs := [8]int32{}
+
+	for i := range ptrs {
+		if input[i] != nil {
+			ptrs[i] = int32(uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - baseMin)
+		}
 	}
 
 	sdup := *s // create copy of initial states to receive intermediate updates
@@ -182,10 +201,10 @@ func blockMd5_avx2(s *digest8, input [8][]byte, base []byte, maskRounds *[8]mask
 	for r := 0; r < rounds; r++ {
 		m := maskRounds[r]
 		var cache cache8 // stack storage for block8 tmp state
-		block8(&sdup.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], &cache[0], int(64*m.rounds))
+		block8(&sdup.v0[0], uintptr(baseMin), &ptrs[0], &cache[0], int(64*m.rounds))
 
-		for j := 0; j < len(bufs); j++ {
-			bufs[j] += int32(64 * m.rounds) // update pointers for next round
+		for j := 0; j < len(ptrs); j++ {
+			ptrs[j] += int32(64 * m.rounds) // update pointers for next round
 			if m.mask&(1<<j) != 0 {         // update digest if still masked as active
 				(*s).v0[j], (*s).v1[j], (*s).v2[j], (*s).v3[j] = sdup.v0[j], sdup.v1[j], sdup.v2[j], sdup.v3[j]
 			}
