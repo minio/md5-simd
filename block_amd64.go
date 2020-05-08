@@ -21,7 +21,7 @@ var hasAVX512 bool
 func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 
 //go:noescape
-func block16(state *uint32, ptrs *int64, mask uint64, n int)
+func block16(state *uint32, base uintptr, ptrs *int32, mask uint64, n int)
 
 // 8-way 4x uint32 digests in 4 ymm registers
 // (ymm0, ymm1, ymm2, ymm3)
@@ -89,7 +89,7 @@ func init() {
 // Interface function to assembly code
 func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 	if hasAVX512 {
-		blockMd5_avx512(d, input, &s.maskRounds16)
+		blockMd5_avx512(d, input, s.allBufs, &s.maskRounds16)
 	} else {
 		d8a, d8b := digest8{}, digest8{}
 		for i := range d8a.v0 {
@@ -125,14 +125,21 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 }
 
 // Interface function to AVX512 assembly code
-func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) {
-	ptrs := [16]int64{}
+func blockMd5_avx512(s *digest16, input [16][]byte, base []byte, maskRounds *[16]maskRounds) {
+	baseMin := uint64(uintptr(unsafe.Pointer(&(base[0]))))
+	ptrs := [16]int32{}
+
 	for i := range ptrs {
-		if input[i] != nil {
+		if len(input[i]) > 0 {
 			if len(input[i]) > internalBlockSize {
 				panic(fmt.Sprintf("Sanity check fails for lane %d: maximum input length cannot exceed internalBlockSize", i))
 			}
-			ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
+
+			off := uint64(uintptr(unsafe.Pointer(&(input[i][0])))) - baseMin
+			if off > math.MaxUint32 {
+				panic(fmt.Sprintf("invalid buffer sent with offset %x", off))
+			}
+			ptrs[i] = int32(off)
 		}
 	}
 
@@ -143,10 +150,10 @@ func blockMd5_avx512(s *digest16, input [16][]byte, maskRounds *[16]maskRounds) 
 	for r := 0; r < rounds; r++ {
 		m := maskRounds[r]
 
-		block16(&sdup.v0[0], &ptrs[0], m.mask, int(64*m.rounds))
+		block16(&sdup.v0[0], uintptr(baseMin), &ptrs[0], m.mask, int(64*m.rounds))
 
 		for j := 0; j < len(ptrs); j++ {
-			ptrs[j] += int64(64 * m.rounds) // update pointers for next round
+			ptrs[j] += int32(64 * m.rounds) // update pointers for next round
 			if m.mask&(1<<j) != 0 {         // update digest if still masked as active
 				(*s).v0[j], (*s).v1[j], (*s).v2[j], (*s).v3[j] = sdup.v0[j], sdup.v1[j], sdup.v2[j], sdup.v3[j]
 			}

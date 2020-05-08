@@ -5,12 +5,8 @@
 // This is the AVX512 implementation of the MD5 block function (16-way parallel)
 
 #define prep(index) \
-	KMOVB	   kmaskL, ktmp								 \
-	VPGATHERQD index*4(base)(ptrsLow*1), ktmp, ymemLow   \
-	KMOVB	   kmaskH, ktmp								 \
-	VPGATHERQD index*4(base)(ptrsHigh*1), ktmp, ymemHigh \
-	VALIGND    $8, memHigh, memHigh, memHigh             \
-	VPORD      memHigh, mem, mem
+	KMOVQ	   kmask, ktmp					    \
+	VPGATHERDD index*4(base)(ptrs*1), ktmp, mem
 
 #define ROUND1(a, b, c, d, index, const, shift) \
 	VXORPS  c, tmp, tmp            \
@@ -62,13 +58,13 @@
 	VXORPS c, ones, tmp           \
 	VPADDD b, a, a
 
-TEXT ·block16(SB),4,$0-32
+TEXT ·block16(SB),4,$0-40
 
     MOVQ  state+0(FP), BX
-    XORQ  SI, SI			// null out base pointer (using absolute 64-bit pointers)
-    MOVQ  ptrs+8(FP), AX
-    KMOVQ mask+16(FP), K1
-    MOVQ  n+24(FP), DX
+    MOVQ  base+8(FP), SI
+    MOVQ  ptrs+16(FP), AX
+    KMOVQ mask+24(FP), K1
+    MOVQ  n+32(FP), DX
     MOVQ  ·avx512md5consts+0(SB), DI
 
 #define a Z0
@@ -83,16 +79,11 @@ TEXT ·block16(SB),4,$0-32
 
 #define tmp       Z8
 #define tmp2      Z9
-#define ptrsLow  Z10
-#define ptrsHigh Z11
+#define ptrs     Z10
 #define ones     Z12
 #define mem      Z15
-#define ymemLow  Y15
-#define memHigh  Z14
-#define ymemHigh Y14
 
-#define kmaskL K1
-#define kmaskH K2
+#define kmask  K1
 #define ktmp   K3
 
 // ----------------------------------------------------------
@@ -112,12 +103,7 @@ TEXT ·block16(SB),4,$0-32
 	VMOVUPD 0xc0(dig), d
 
 	// load source pointers
-	VMOVUPD 0x00(AX), ptrsLow
-	VMOVUPD 0x40(AX), ptrsHigh
-
-	// setup masks
-	KMOVW	   kmaskL, kmaskH
-	KSHIFTRW   $8, kmaskH, kmaskH
+	VMOVUPD 0x00(AX), ptrs
 
 	MOVQ $-1, AX
 	VPBROADCASTQ AX, ones

@@ -59,14 +59,16 @@ func TestBlock16(t *testing.T) {
 		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
 	}
 
-	ptrs := [16]int64{}
+	bufs := [16]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7,
+		4 + internalBlockSize*8, 4 + internalBlockSize*9, 4 + internalBlockSize*10, 4 + internalBlockSize*11, 4 + internalBlockSize*12, 4 + internalBlockSize*13, 4 + internalBlockSize*14, 4 + internalBlockSize*15}
 
-	for i := range ptrs {
-		ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
-		// fmt.Printf("%016x\n", ptrs[i])
+	base := make([]byte, 4+16*internalBlockSize)
+
+	for i := 0; i < len(input); i++ {
+		copy(base[bufs[i]:], input[i])
 	}
 
-	block16(&s.v0[0], &ptrs[0], 0xffff, 64)
+	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], 0xffff, 64)
 
 	want :=
 		`00000000  82 3c 09 52 b9 77 11 2a  65 ee 4c 82 f9 ad 4d 28  |.<.R.w.*e.L...M(|
@@ -124,15 +126,18 @@ func TestBlock16Masked(t *testing.T) {
 		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
 	}
 
-	ptrs := [16]int64{}
+	bufs := [16]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7,
+		4 + internalBlockSize*8, 4 + internalBlockSize*9, 4 + internalBlockSize*10, 4 + internalBlockSize*11, 4 + internalBlockSize*12, 4 + internalBlockSize*13, 4 + internalBlockSize*14, 4 + internalBlockSize*15}
 
-	for i := range ptrs {
+	base := make([]byte, 4+16*internalBlockSize)
+
+	for i := 0; i < len(input); i++ {
 		if input[i] != nil {
-			ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
+			copy(base[bufs[i]:], input[i])
 		}
 	}
 
-	block16(&s.v0[0], &ptrs[0], mask, 64)
+	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], mask, 64)
 
 	want :=
 		`00000000  82 3c 09 52 ac 1d 1f 03  65 ee 4c 82 ac 1d 1f 03  |.<.R....e.L.....|
@@ -223,10 +228,13 @@ func BenchmarkBlock16(b *testing.B) {
 		s.v0[i], s.v1[i], s.v2[i], s.v3[i] = init0, init1, init2, init3
 	}
 
-	ptrs := [16]int64{}
+	bufs := [16]int32{4, 4 + internalBlockSize, 4 + internalBlockSize*2, 4 + internalBlockSize*3, 4 + internalBlockSize*4, 4 + internalBlockSize*5, 4 + internalBlockSize*6, 4 + internalBlockSize*7,
+		4 + internalBlockSize*8, 4 + internalBlockSize*9, 4 + internalBlockSize*10, 4 + internalBlockSize*11, 4 + internalBlockSize*12, 4 + internalBlockSize*13, 4 + internalBlockSize*14, 4 + internalBlockSize*15}
 
-	for i := range ptrs {
-		ptrs[i] = int64(uintptr(unsafe.Pointer(&(input[i][0]))))
+	base := make([]byte, 4+16*internalBlockSize)
+
+	for i := 0; i < len(input); i++ {
+		copy(base[bufs[i]:], input[i])
 	}
 
 	b.SetBytes(int64(size * 16))
@@ -234,6 +242,6 @@ func BenchmarkBlock16(b *testing.B) {
 	b.ResetTimer()
 
 	for j := 0; j < b.N; j++ {
-		block16(&s.v0[0], &ptrs[0], 0xffff, size)
+		block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], 0xffff, size)
 	}
 }
