@@ -189,7 +189,7 @@ BenchmarkBlock16-4                      8228.88 MB/s           0 B/op          0
 
 ## License
 
-`md5-simd` is released under the MIT License. You can find the complete text in the file LICENSE.
+`md5-simd` is released under the Apache License v2.0. You can find the complete text in the file LICENSE.
 
 ## Contributing
 
