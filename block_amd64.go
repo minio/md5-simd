@@ -12,7 +12,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/klauspost/cpuid"
+	"github.com/klauspost/cpuid/v2"
 )
 
 var hasAVX512 bool
@@ -83,7 +83,7 @@ var avx512md5consts = func(c []uint32) []uint32 {
 }(md5consts[:])
 
 func init() {
-	hasAVX512 = cpuid.CPU.AVX512F()
+	hasAVX512 = cpuid.CPU.Supports(cpuid.AVX512F)
 }
 
 // Interface function to assembly code
