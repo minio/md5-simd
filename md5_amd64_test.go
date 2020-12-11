@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/klauspost/cpuid"
+	"github.com/klauspost/cpuid/v2"
 )
 
 const benchmarkWithSum = true
@@ -194,7 +194,7 @@ func BenchmarkAvx2(b *testing.B) {
 }
 
 func BenchmarkAvx2Parallel(b *testing.B) {
-	if !cpuid.CPU.AVX2() {
+	if !cpuid.CPU.Supports(cpuid.AVX2) {
 		b.SkipNow()
 	}
 	restore := hasAVX512

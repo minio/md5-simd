@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/klauspost/cpuid"
+	"github.com/klauspost/cpuid/v2"
 )
 
 // MD5 initialization constants
@@ -60,7 +60,7 @@ type md5Server struct {
 
 // NewServer - Create new object for parallel processing handling
 func NewServer() Server {
-	if !cpuid.CPU.AVX2() {
+	if !cpuid.CPU.Supports(cpuid.AVX2) {
 		return &fallbackServer{}
 	}
 	md5srv := &md5Server{}

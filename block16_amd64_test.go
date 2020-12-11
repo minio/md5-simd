@@ -14,7 +14,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/klauspost/cpuid"
+	"github.com/klauspost/cpuid/v2"
 )
 
 func reverse(s string) string {
@@ -174,7 +174,7 @@ func TestBlock16Masked(t *testing.T) {
 }
 
 func BenchmarkBlock8(b *testing.B) {
-	if !cpuid.CPU.AVX2() {
+	if !cpuid.CPU.Supports(cpuid.AVX2) {
 		b.SkipNow()
 	}
 
