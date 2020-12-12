@@ -2,6 +2,8 @@
 // Use of this source code is governed by a license that can be
 // found in the LICENSE file.
 
+//+build !noasm,!appengine,gc
+
 // This is the AVX512 implementation of the MD5 block function (16-way parallel)
 
 #define prep(index) \

@@ -1,3 +1,5 @@
+//+build !noasm,!appengine,gc
+
 // Copyright (c) 2018 Igneous Systems
 //   MIT License
 //
