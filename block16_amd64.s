@@ -11,7 +11,7 @@
 	VPGATHERDD index*4(base)(ptrs*1), ktmp, mem
 
 #define ROUND1(a, b, c, d, index, const, shift) \
-	VXORPS  c, tmp, tmp            \
+	VXORPD  c, tmp, tmp            \
 	VPADDD  64*const(consts), a, a \
 	VPADDD  mem, a, a              \
 	VPTERNLOGD $0x6C, b, d, tmp    \
@@ -22,7 +22,7 @@
 	VPADDD  b, a, a
 
 #define ROUND1noload(a, b, c, d, const, shift) \
-	VXORPS  c, tmp, tmp            \
+	VXORPD  c, tmp, tmp            \
 	VPADDD  64*const(consts), a, a \
 	VPADDD  mem, a, a              \
 	VPTERNLOGD $0x6C, b, d, tmp    \
@@ -34,7 +34,7 @@
 #define ROUND2(a, b, c, d, zreg, const, shift) \
 	VPADDD  64*const(consts), a, a \
 	VPADDD  zreg, a, a             \
-	VANDNPS c, tmp, tmp            \
+	VANDNPD c, tmp, tmp            \
 	VPTERNLOGD $0xEC, b, tmp, tmp2 \
 	VMOVAPD c, tmp                 \
 	VPADDD  tmp2, a, a             \
@@ -57,7 +57,7 @@
 	VPTERNLOGD $0x36, b, c, tmp   \
 	VPADDD tmp, a, a              \
 	VPROLD $shift, a, a           \
-	VXORPS c, ones, tmp           \
+	VXORPD c, ones, tmp           \
 	VPADDD b, a, a
 
 TEXT ·block16(SB),4,$0-40
@@ -192,7 +192,7 @@ loop:
 	ROUND3(c,d,a,b, Z31,0x2e,16)
 	ROUND3(b,c,d,a, Z18,0x2f,23)
 
-	VXORPS d, ones, tmp
+	VXORPD d, ones, tmp
 
 	ROUND4(a,b,c,d, Z16,0x30, 6)
 	ROUND4(d,a,b,c, Z23,0x31,10)
