@@ -72,7 +72,7 @@ TEXT ·block8(SB), 4, $0-40
 #define consts DI
 
 #define prepmask \
-	VXORPD   mask, mask, mask \
+	VPXOR    mask, mask, mask \
 	VPCMPGTD mask, off, mask
 
 #define prep(index) \
@@ -88,14 +88,14 @@ TEXT ·block8(SB), 4, $0-40
 #define roll(shift, a) \
 	VPSLLD $shift, a, rtmp1 \
 	VPSRLD $32-shift, a, a  \
-	VORPD  rtmp1, a, a
+	VPOR   rtmp1, a, a
 
 #define ROUND1(a, b, c, d, index, const, shift) \
-	VXORPD  c, tmp, tmp            \
+	VPXOR   c, tmp, tmp            \
 	VPADDD  32*const(consts), a, a \
 	VPADDD  mem, a, a              \
-	VANDPD  b, tmp, tmp            \
-	VXORPD  d, tmp, tmp            \
+	VPAND   b, tmp, tmp            \
+	VPXOR   d, tmp, tmp            \
 	prep(index)                    \
 	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
@@ -106,8 +106,8 @@ TEXT ·block8(SB), 4, $0-40
 	VXORPD  c, tmp, tmp            \
 	VPADDD  32*const(consts), a, a \
 	VPADDD  mem, a, a              \
-	VANDPD  b, tmp, tmp            \
-	VXORPD  d, tmp, tmp            \
+	VPAND   b, tmp, tmp            \
+	VPXOR   d, tmp, tmp            \
 	load(index)                    \
 	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
@@ -117,10 +117,10 @@ TEXT ·block8(SB), 4, $0-40
 #define ROUND2(a, b, c, d, index, const, shift) \
 	VPADDD  32*const(consts), a, a \
 	VPADDD  mem, a, a              \
-	VANDPD  b, tmp2, tmp2          \
+	VPAND   b, tmp2, tmp2          \
 	VANDNPD c, tmp, tmp            \
 	load(index)                    \
-	VORPD   tmp, tmp2, tmp2        \
+	VPOR    tmp, tmp2, tmp2        \
 	VMOVAPD c, tmp                 \
 	VPADDD  tmp2, a, a             \
 	VMOVAPD c, tmp2                \
@@ -131,8 +131,8 @@ TEXT ·block8(SB), 4, $0-40
 	VPADDD  32*const(consts), a, a \
 	VPADDD  mem, a, a              \
 	load(index)                    \
-	VXORPD  d, tmp, tmp            \
-	VXORPD  b, tmp, tmp            \
+	VPXOR   d, tmp, tmp            \
+	VPXOR   b, tmp, tmp            \
 	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
 	VMOVAPD b, tmp                 \
@@ -141,12 +141,12 @@ TEXT ·block8(SB), 4, $0-40
 #define ROUND4(a, b, c, d, index, const, shift) \
 	VPADDD 32*const(consts), a, a \
 	VPADDD mem, a, a              \
-	VORPD  b, tmp, tmp            \
-	VXORPD c, tmp, tmp            \
+	VPOR   b, tmp, tmp            \
+	VPXOR  c, tmp, tmp            \
 	VPADDD tmp, a, a              \
 	load(index)                   \
 	roll(shift,a)                 \
-	VXORPD c, ones, tmp           \
+	VPXOR  c, ones, tmp           \
 	VPADDD b, a, a
 
 	// load digest into state registers
@@ -244,7 +244,7 @@ loop:
 	ROUND3(b,c,d,a, 0,0x2f,23)
 
 	load(0)
-	VXORPD d, ones, tmp
+	VPXOR d, ones, tmp
 
 	ROUND4(a,b,c,d, 7,0x30, 6)
 	ROUND4(d,a,b,c,14,0x31,10)
