@@ -18,7 +18,7 @@ import (
 var hasAVX512 bool
 
 func init() {
-	// VANDNPS requires AVX512DQ. Technically it could be VPTERNLOGQ which is AVX512F.
+	// VANDNPD requires AVX512DQ. Technically it could be VPTERNLOGQ which is AVX512F.
 	hasAVX512 = cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ)
 }
 
