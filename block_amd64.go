@@ -93,6 +93,8 @@ func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
 		return
 	}
 
+	// Preparing data using copy is slower since copies aren't inlined.
+
 	// Calculate on this goroutine
 	if half {
 		for i := range s.i8[0][:] {
