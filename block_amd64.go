@@ -28,6 +28,9 @@ func block8(state *uint32, base uintptr, bufs *int32, cache *byte, n int)
 //go:noescape
 func block16(state *uint32, base uintptr, ptrs *int32, mask uint64, n int)
 
+//go:noescape
+func blockScalar(dig *digest, p []byte)
+
 // 8-way 4x uint32 digests in 4 ymm registers
 // (ymm0, ymm1, ymm2, ymm3)
 type digest8 struct {

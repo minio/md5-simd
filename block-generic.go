@@ -12,10 +12,7 @@ import (
 )
 
 type digest struct {
-	s   [4]uint32
-	x   [BlockSize]byte
-	nx  int
-	len uint64
+	s [4]uint32
 }
 
 func blockGeneric(dig *digest, p []byte) {
