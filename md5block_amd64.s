@@ -1,3 +1,5 @@
+//+build !noasm,!appengine,gc
+
 // Original source:
 //	http://www.zorinaq.com/papers/md5-amd64.html
 //	http://www.zorinaq.com/papers/md5-amd64.tar.bz2
