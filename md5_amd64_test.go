@@ -123,6 +123,7 @@ func benchmarkSingle(b *testing.B, blockSize int) {
 
 func benchmarkParallel(b *testing.B, blockSize int) {
 	// We write input 16x per loop.
+	// We have to alloc per parallel
 	b.SetBytes(int64(blockSize * 16))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -156,10 +157,8 @@ func benchmarkParallel(b *testing.B, blockSize int) {
 }
 
 func BenchmarkAvx2(b *testing.B) {
-
-	restore := hasAVX512
-
 	// Make sure AVX512 is disabled
+	restore := hasAVX512
 	hasAVX512 = false
 
 	b.Run("32KB", func(b *testing.B) {
