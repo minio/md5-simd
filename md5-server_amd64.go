@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/klauspost/cpuid/v2"
 )
@@ -56,6 +57,10 @@ type md5Server struct {
 	maskRounds8b [8]maskRounds         // Pre-allocated static array for max 8 rounds (2nd AVX2 core)
 	allBufs      []byte                // Preallocated buffer.
 	buffers      chan []byte           // Preallocated buffers, sliced from allBufs.
+
+	i8       [2][8][]byte // avx2 temporary vars
+	d8a, d8b digest8
+	wg       sync.WaitGroup
 }
 
 // NewServer - Create new object for parallel processing handling
