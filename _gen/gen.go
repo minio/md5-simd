@@ -247,9 +247,13 @@ func main() {
 		x.XORL(c, R9)
 		x.ADDL(R9, a)
 		loadSrc(index, R8)
-		x.MOVL(ones, R9)
+		if index >= 0 {
+			x.MOVL(ones, R9)
+		}
 		ROLL(shift, a)
-		x.XORL(c, R9)
+		if index >= 0 {
+			x.XORL(c, R9)
+		}
 		x.ADDL(b, a)
 	}
 
