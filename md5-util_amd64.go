@@ -12,6 +12,10 @@ type lane struct {
 	pos uint
 }
 
+type digest struct {
+	s [4]uint32
+}
+
 // Helper struct for generating number of rounds in combination with mask for valid lanes
 type maskRounds struct {
 	mask   uint64

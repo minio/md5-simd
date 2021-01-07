@@ -121,6 +121,25 @@ func benchmarkSingle(b *testing.B, blockSize int) {
 	}
 }
 
+func benchmarkSingleWriter(b *testing.B, blockSize int) {
+	server := NewServer()
+	defer server.Close()
+	h := server.NewHash()
+	input := bytes.Repeat([]byte{0x61}, blockSize)
+
+	b.SetBytes(int64(blockSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+	var tmp [Size]byte
+
+	for j := 0; j < b.N; j++ {
+		h.Write(input)
+		if benchmarkWithSum {
+			_ = h.Sum(tmp[:0])
+		}
+	}
+}
+
 func benchmarkParallel(b *testing.B, blockSize int) {
 	// We write input 16x per loop.
 	// We have to alloc per parallel
@@ -229,5 +248,44 @@ func BenchmarkAvx2Parallel(b *testing.B) {
 	b.Run("8MB", func(b *testing.B) {
 		benchmarkParallel(b, 8*1024*1024)
 	})
+	hasAVX512 = restore
+}
+
+// BenchmarkAvx2SingleWriter will benchmark the speed having only a single writer
+// writing blocks with the specified size.
+// This is pretty much the worst case scenario.
+func BenchmarkAvx2SingleWriter(b *testing.B) {
+	// Make sure AVX512 is disabled
+	restore := hasAVX512
+	hasAVX512 = false
+
+	b.Run("32KB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 32*1024)
+	})
+	b.Run("64KB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 64*1024)
+	})
+	b.Run("128KB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 128*1024)
+	})
+	b.Run("256KB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 256*1024)
+	})
+	b.Run("512KB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 512*1024)
+	})
+	b.Run("1MB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 1024*1024)
+	})
+	b.Run("2MB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 2*1024*1024)
+	})
+	b.Run("4MB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 4*1024*1024)
+	})
+	b.Run("8MB", func(b *testing.B) {
+		benchmarkSingleWriter(b, 8*1024*1024)
+	})
+
 	hasAVX512 = restore
 }
