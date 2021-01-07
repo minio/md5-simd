@@ -160,7 +160,7 @@ func (s *md5Server) process(newClients chan newClient) {
 
 					sum := sumResult{}
 					// Add end block to current digest.
-					blockScalar(&dig, block.msg)
+					blockScalar(&dig.s, block.msg)
 
 					binary.LittleEndian.PutUint32(sum.digest[0:], dig.s[0])
 					binary.LittleEndian.PutUint32(sum.digest[4:], dig.s[1])
@@ -291,7 +291,7 @@ func (s *md5Server) blocks(lanes []blockInput) {
 			}
 			if len(lane.msg) > 0 {
 				// Update...
-				blockScalar(&d, lane.msg)
+				blockScalar(&d.s, lane.msg)
 			}
 			dig := [Size]byte{}
 			binary.LittleEndian.PutUint32(dig[0:], d.s[0])
@@ -330,7 +330,7 @@ func (s *md5Server) blocks(lanes []blockInput) {
 						return
 					}
 					// Update...
-					blockScalar(&d, lane.msg)
+					blockScalar(&d.s, lane.msg)
 					results[i] = d
 				}(i)
 			}
