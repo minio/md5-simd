@@ -61,7 +61,9 @@ type md5Server struct {
 	allBufs      []byte                // Preallocated buffer.
 	buffers      chan []byte           // Preallocated buffers, sliced from allBufs.
 
-	wg sync.WaitGroup
+	i8       [2][8][]byte // avx2 temporary vars
+	d8a, d8b digest8
+	wg       sync.WaitGroup
 }
 
 // NewServer - Create new object for parallel processing handling
