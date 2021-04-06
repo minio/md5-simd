@@ -4,8 +4,12 @@
 // +build !noasm
 // +build gc
 
+#include "textflag.h"
+
 // func blockScalar(dig *[4]uint32, p []byte)
-TEXT ·blockScalar(SB), $0-32
+// Requires: SSE2
+TEXT ·blockScalar(SB), NOSPLIT, $0-32
+	MOVQ BP, X0
 	MOVQ p_len+16(FP), AX
 	MOVQ dig+0(FP), CX
 	MOVQ p_base+8(FP), DX
@@ -711,4 +715,5 @@ loop:
 	MOVL CX, 12(AX)
 
 end:
+	MOVQ X0, BP
 	RET

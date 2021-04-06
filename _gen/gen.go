@@ -3,6 +3,7 @@ package main
 //go:generate go run gen.go -out ../md5block_amd64.s -stubs ../md5block_amd64.go -pkg=md5simd
 
 import (
+	"github.com/mmcloughlin/avo/attr"
 	x "github.com/mmcloughlin/avo/build"
 	"github.com/mmcloughlin/avo/buildtags"
 	o "github.com/mmcloughlin/avo/operand"
@@ -49,9 +50,10 @@ func main() {
 	x.Constraint(buildtags.Not("appengine").ToConstraint())
 	x.Constraint(buildtags.Not("noasm").ToConstraint())
 	x.Constraint(buildtags.Term("gc").ToConstraint())
-	x.TEXT("blockScalar", 0, "func(dig *[4]uint32, p []byte)")
+	x.TEXT("blockScalar", attr.NOSPLIT, "func(dig *[4]uint32, p []byte)")
 	x.Doc("Encode p to digest")
 	x.Pragma("noescape")
+	restore := saveBP()
 
 	srcLen := x.Load(x.Param("p").Len(), x.GP64())
 	digest := x.Load(x.Param("dig"), x.GP64())
@@ -293,7 +295,17 @@ func main() {
 	}
 
 	x.Label("end")
+	restore()
 	x.RET()
 
 	x.Generate()
+}
+
+// saveBP will save RBP in an XMM register and restore it when returning.
+func saveBP() (restore func()) {
+	xmm := x.XMM()
+	x.MOVQ(reg.RBP, xmm)
+	return func() {
+		x.MOVQ(xmm, reg.RBP)
+	}
 }
