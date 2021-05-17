@@ -133,7 +133,7 @@ func (s *md5Server) process(newClients chan newClient) {
 			case block, ok := <-cl:
 				if !ok {
 					// Client disconnected
-					delete(clients, block.uid)
+					delete(clients, uid)
 					return
 				}
 				if block.uid != uid {
