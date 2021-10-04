@@ -219,10 +219,10 @@ loop:
 	JNE  loop
 
 	// Mask digest updates...
-	VMOVDQU32 a, (dig)
-	VMOVDQU32 b, 0x40(dig)
-	VMOVDQU32 c, 0x80(dig)
-	VMOVDQU32 d, 0xc0(dig)
+	VMOVDQU32 a, kmask, (dig)
+	VMOVDQU32 b, kmask, 0x40(dig)
+	VMOVDQU32 c, kmask, 0x80(dig)
+	VMOVDQU32 d, kmask, 0xc0(dig)
 
 	VZEROUPPER
 	RET
