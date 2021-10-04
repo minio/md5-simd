@@ -87,7 +87,7 @@ TEXT ·block16(SB), 4, $0-40
 #define tmp2      Z9
 #define ptrs     Z10
 #define ones     Z12
-#define mem Z15
+#define mem      Z15
 
 #define dig    BX
 #define count  DX
@@ -217,10 +217,10 @@ loop:
 	JNE  loop
 
 	// Mask digest updates...
-	VMOVDQU32 a, (dig)
-	VMOVDQU32 b, 0x40(dig)
-	VMOVDQU32 c, 0x80(dig)
-	VMOVDQU32 d, 0xc0(dig)
+	VMOVUPD a, (dig)
+	VMOVUPD b, 0x40(dig)
+	VMOVUPD c, 0x80(dig)
+	VMOVUPD d, 0xc0(dig)
 
 	VZEROUPPER
 	RET
