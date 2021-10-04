@@ -7,7 +7,8 @@
 // This is the AVX512 implementation of the MD5 block function (16-way parallel)
 
 #define prep(index) \
-	VPGATHERDD index*4(base)(ptrs*1), kmask, mem
+	KMOVQ      kmask, ktmp                      \
+	VPGATHERDD index*4(base)(ptrs*1), ktmp, mem
 
 #define ROUND1(a, b, c, d, index, const, shift) \
 	VPXORQ     c, tmp, tmp            \
@@ -70,6 +71,7 @@
 #define sd Z7
 
 #define kmask  K1
+#define ktmp K3
 
 TEXT ·block16(SB), 4, $0-40
 	MOVQ  state+0(FP), BX
