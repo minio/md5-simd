@@ -69,11 +69,6 @@
 #define sc Z6
 #define sd Z7
 
-#define tmp       Z8
-#define tmp2      Z9
-#define ptrs     Z10
-#define ones     Z12
-
 #define kmask  K1
 
 TEXT ·block16(SB), 4, $0-40
@@ -87,6 +82,11 @@ TEXT ·block16(SB), 4, $0-40
 	// ----------------------------------------------------------
 	// Registers Z16 through to Z31 are used for caching purposes
 	// ----------------------------------------------------------
+
+#define tmp       Z8
+#define tmp2      Z9
+#define ptrs     Z10
+#define ones     Z12
 
 #define dig    BX
 #define count  DX
