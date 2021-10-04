@@ -132,7 +132,7 @@ loop:
 	ROUND1(d,a,b,c,14,0x0d,12, Z29, Z30)
 	ROUND1(c,d,a,b,15,0x0e,17, Z30, Z31)
 
-	ROUND1noload(b,c,d,a, 0x0f,22, Z16)
+	ROUND1noload(b,c,d,a, 0x0f,22, Z17)
 
 	VMOVAPD d, tmp
 	VMOVAPD d, tmp2
