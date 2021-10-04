@@ -137,7 +137,7 @@ func TestBlock16Masked(t *testing.T) {
 		}
 	}
 
-	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], mask, 64)
+	block16(&s.v0[0], uintptr(unsafe.Pointer(&base[0])), &bufs[0], mask, 64)
 
 	want :=
 		`00000000  82 3c 09 52 ac 1d 1f 03  65 ee 4c 82 ac 1d 1f 03  |.<.R....e.L.....|
