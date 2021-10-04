@@ -75,7 +75,7 @@ TEXT ·block16(SB), 4, $0-40
 	MOVQ  state+0(FP), BX
 	MOVQ  base+8(FP), SI
 	MOVQ  ptrs+16(FP), AX
-	KMOVW mask+24(FP), kmask
+	KMOVQ mask+24(FP), kmask
 	MOVQ  n+32(FP), DX
 	MOVQ  ·avx512md5consts+0(SB), DI
 
@@ -217,10 +217,10 @@ loop:
 	JNE  loop
 
 	// Mask digest updates...
-	VMOVUPD a, (dig)
-	VMOVUPD b, 0x40(dig)
-	VMOVUPD c, 0x80(dig)
-	VMOVUPD d, 0xc0(dig)
+	VMOVDQU32 a, (dig)
+	VMOVDQU32 b, 0x40(dig)
+	VMOVDQU32 c, 0x80(dig)
+	VMOVDQU32 d, 0xc0(dig)
 
 	VZEROUPPER
 	RET
