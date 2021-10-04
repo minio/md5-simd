@@ -199,10 +199,10 @@ loop:
 	SUBQ $64, count
 	JNE  loop
 
-	VMOVDQU32 a, kmask, (dig)
-	VMOVDQU32 b, kmask, 0x40(dig)
-	VMOVDQU32 c, kmask, 0x80(dig)
-	VMOVDQU32 d, kmask, 0xc0(dig)
+	VMOVDQU32 a, K0, (dig)
+	VMOVDQU32 b, K0, 0x40(dig)
+	VMOVDQU32 c, K0, 0x80(dig)
+	VMOVDQU32 d, K0, 0xc0(dig)
 
 	VZEROUPPER
 	RET
