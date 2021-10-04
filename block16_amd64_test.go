@@ -117,8 +117,9 @@ func TestBlock16Masked(t *testing.T) {
 	for i := range input {
 		if (i & 1) == 1 {
 			input[i] = nil
+		} else {
+			mask |= 1 << (i)
 		}
-		mask |= 1 << (i)
 	}
 	t.Logf("Mask: %x", mask)
 
