@@ -91,52 +91,47 @@ TEXT ·block8(SB), 4, $0-40
 	VPOR   rtmp1, a, a
 
 #define ROUND1(a, b, c, d, index, const, shift) \
-	VPXOR   c, tmp, tmp            \
-	VPADDD  32*const(consts), a, a \
-	VPADDD  mem, a, a              \
-	VPAND   b, tmp, tmp            \
-	VPXOR   d, tmp, tmp            \
-	prep(index)                    \
-	VPADDD  tmp, a, a              \
-	roll(shift,a)                  \
-	VMOVAPD c, tmp                 \
-	VPADDD  b, a, a
+	VPXOR  c, d, tmp              \
+	VPADDD 32*const(consts), a, a \
+	VPADDD mem, a, a              \
+	VPAND  b, tmp, tmp            \
+	VPXOR  d, tmp, tmp            \
+	prep(index)                   \
+	VPADDD tmp, a, a              \
+	roll(shift,a)                 \
+	VPADDD b, a, a
 
 #define ROUND1load(a, b, c, d, index, const, shift) \
-	VXORPD  c, tmp, tmp            \
-	VPADDD  32*const(consts), a, a \
-	VPADDD  mem, a, a              \
-	VPAND   b, tmp, tmp            \
-	VPXOR   d, tmp, tmp            \
-	load(index)                    \
-	VPADDD  tmp, a, a              \
-	roll(shift,a)                  \
-	VMOVAPD c, tmp                 \
-	VPADDD  b, a, a
+	VXORPD c, d, tmp              \
+	VPADDD 32*const(consts), a, a \
+	VPADDD mem, a, a              \
+	VPAND  b, tmp, tmp            \
+	VPXOR  d, tmp, tmp            \
+	load(index)                   \
+	VPADDD tmp, a, a              \
+	roll(shift,a)                 \
+	VPADDD b, a, a
 
 #define ROUND2(a, b, c, d, index, const, shift) \
 	VPADDD  32*const(consts), a, a \
 	VPADDD  mem, a, a              \
-	VPAND   b, tmp2, tmp2          \
-	VANDNPD c, tmp, tmp            \
+	VPAND   b, d, tmp2             \ // (d & b)
+	VANDNPD c, d, tmp              \ // = ~d & c
 	load(index)                    \
-	VPOR    tmp, tmp2, tmp2        \
-	VMOVAPD c, tmp                 \
 	VPADDD  tmp2, a, a             \
-	VMOVAPD c, tmp2                \
+	VPADDD  tmp, a, a              \
 	roll(shift,a)                  \
 	VPADDD  b, a, a
 
 #define ROUND3(a, b, c, d, index, const, shift) \
-	VPADDD  32*const(consts), a, a \
-	VPADDD  mem, a, a              \
-	load(index)                    \
-	VPXOR   d, tmp, tmp            \
-	VPXOR   b, tmp, tmp            \
-	VPADDD  tmp, a, a              \
-	roll(shift,a)                  \
-	VMOVAPD b, tmp                 \
-	VPADDD  b, a, a
+	VPADDD 32*const(consts), a, a \
+	VPADDD mem, a, a              \
+	load(index)                   \
+	VPXOR  d, c, tmp              \
+	VPXOR  b, tmp, tmp            \
+	VPADDD tmp, a, a              \
+	roll(shift,a)                 \
+	VPADDD b, a, a
 
 #define ROUND4(a, b, c, d, index, const, shift) \
 	VPADDD 32*const(consts), a, a \
@@ -168,7 +163,6 @@ loop:
 	VMOVAPD d, sd
 
 	prep(0)
-	VMOVAPD d, tmp
 	store(0)
 
 	ROUND1(a,b,c,d, 1,0x00, 7)
@@ -203,9 +197,6 @@ loop:
 	store(15)
 	ROUND1load(b,c,d,a, 1,0x0f,22)
 
-	VMOVAPD d, tmp
-	VMOVAPD d, tmp2
-
 	ROUND2(a,b,c,d, 6,0x10, 5)
 	ROUND2(d,a,b,c,11,0x11, 9)
 	ROUND2(c,d,a,b, 0,0x12,14)
@@ -221,10 +212,7 @@ loop:
 	ROUND2(a,b,c,d, 2,0x1c, 5)
 	ROUND2(d,a,b,c, 7,0x1d, 9)
 	ROUND2(c,d,a,b,12,0x1e,14)
-	ROUND2(b,c,d,a, 0,0x1f,20)
-
-	load(5)
-	VMOVAPD c, tmp
+	ROUND2(b,c,d,a, 5,0x1f,20)
 
 	ROUND3(a,b,c,d, 8,0x20, 4)
 	ROUND3(d,a,b,c,11,0x21,11)
@@ -243,7 +231,6 @@ loop:
 	ROUND3(c,d,a,b, 2,0x2e,16)
 	ROUND3(b,c,d,a, 0,0x2f,23)
 
-	load(0)
 	VPXOR d, ones, tmp
 
 	ROUND4(a,b,c,d, 7,0x30, 6)
