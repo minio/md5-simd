@@ -154,11 +154,21 @@ func blockMd5_avx512(s *digest16, input [16][]byte, base []byte, maskRounds *[16
 		}
 	}
 
+	sdup := *s // create copy of initial states to receive intermediate updates
+
 	rounds := generateMaskAndRounds16(input, maskRounds)
 
 	for r := 0; r < rounds; r++ {
 		m := maskRounds[r]
-		block16(&s.v0[0], uintptr(baseMin), &ptrs[0], m.mask, int(64*m.rounds))
+
+		block16(&sdup.v0[0], uintptr(baseMin), &ptrs[0], m.mask, int(64*m.rounds))
+
+		for j := 0; j < len(ptrs); j++ {
+			ptrs[j] += int32(64 * m.rounds) // update pointers for next round
+			if m.mask&(1<<j) != 0 {         // update digest if still masked as active
+				(*s).v0[j], (*s).v1[j], (*s).v2[j], (*s).v3[j] = sdup.v0[j], sdup.v1[j], sdup.v2[j], sdup.v3[j]
+			}
+		}
 	}
 }
 
