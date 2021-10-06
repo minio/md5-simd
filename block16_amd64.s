@@ -6,22 +6,22 @@
 
 // This is the AVX512 implementation of the MD5 block function (16-way parallel)
 
-#define prep(index, dst) \
+#define prep(index) \
 	KMOVQ      kmask, ktmp                      \
-	VPGATHERDD index*4(base)(ptrs*1), ktmp, dst
+	VPGATHERDD index*4(base)(ptrs*1), ktmp, mem
 
-#define ROUND1(a, b, c, d, index, const, shift, mem, dst) \
+#define ROUND1(a, b, c, d, index, const, shift) \
 	VPXORQ     c, tmp, tmp            \
 	VPADDD     64*const(consts), a, a \
 	VPADDD     mem, a, a              \
 	VPTERNLOGD $0x6C, b, d, tmp       \
-	prep(index, dst)                  \
+	prep(index)                       \
 	VPADDD     tmp, a, a              \
 	VPROLD     $shift, a, a           \
 	VMOVAPD    c, tmp                 \
 	VPADDD     b, a, a
 
-#define ROUND1noload(a, b, c, d, const, shift, mem) \
+#define ROUND1noload(a, b, c, d, const, shift) \
 	VPXORQ     c, tmp, tmp            \
 	VPADDD     64*const(consts), a, a \
 	VPADDD     mem, a, a              \
@@ -89,6 +89,7 @@ TEXT ·block16(SB), 4, $0-40
 #define tmp2      Z9
 #define ptrs     Z10
 #define ones     Z12
+#define mem      Z15
 
 #define dig    BX
 #define count  DX
@@ -113,26 +114,42 @@ loop:
 	VMOVAPD c, sc
 	VMOVAPD d, sd
 
-	prep(0, Z16)
+	prep(0)
 	VMOVAPD d, tmp
+	VMOVAPD mem, Z16
 
-	ROUND1(a,b,c,d, 1,0x00, 7, Z16, Z17)
-	ROUND1(d,a,b,c, 2,0x01,12, Z17, Z18)
-	ROUND1(c,d,a,b, 3,0x02,17, Z18, Z19)
-	ROUND1(b,c,d,a, 4,0x03,22, Z19, Z20)
-	ROUND1(a,b,c,d, 5,0x04, 7, Z20, Z21)
-	ROUND1(d,a,b,c, 6,0x05,12, Z21, Z22)
-	ROUND1(c,d,a,b, 7,0x06,17, Z22, Z23)
-	ROUND1(b,c,d,a, 8,0x07,22, Z23, Z24)
-	ROUND1(a,b,c,d, 9,0x08, 7, Z24, Z25)
-	ROUND1(d,a,b,c,10,0x09,12, Z25, Z26)
-	ROUND1(c,d,a,b,11,0x0a,17, Z26, Z27)
-	ROUND1(b,c,d,a,12,0x0b,22, Z27, Z28)
-	ROUND1(a,b,c,d,13,0x0c, 7, Z28, Z29)
-	ROUND1(d,a,b,c,14,0x0d,12, Z29, Z30)
-	ROUND1(c,d,a,b,15,0x0e,17, Z30, Z31)
+	ROUND1(a,b,c,d, 1,0x00, 7)
+	VMOVAPD mem, Z17
+	ROUND1(d,a,b,c, 2,0x01,12)
+	VMOVAPD mem, Z18
+	ROUND1(c,d,a,b, 3,0x02,17)
+	VMOVAPD mem, Z19
+	ROUND1(b,c,d,a, 4,0x03,22)
+	VMOVAPD mem, Z20
+	ROUND1(a,b,c,d, 5,0x04, 7)
+	VMOVAPD mem, Z21
+	ROUND1(d,a,b,c, 6,0x05,12)
+	VMOVAPD mem, Z22
+	ROUND1(c,d,a,b, 7,0x06,17)
+	VMOVAPD mem, Z23
+	ROUND1(b,c,d,a, 8,0x07,22)
+	VMOVAPD mem, Z24
+	ROUND1(a,b,c,d, 9,0x08, 7)
+	VMOVAPD mem, Z25
+	ROUND1(d,a,b,c,10,0x09,12)
+	VMOVAPD mem, Z26
+	ROUND1(c,d,a,b,11,0x0a,17)
+	VMOVAPD mem, Z27
+	ROUND1(b,c,d,a,12,0x0b,22)
+	VMOVAPD mem, Z28
+	ROUND1(a,b,c,d,13,0x0c, 7)
+	VMOVAPD mem, Z29
+	ROUND1(d,a,b,c,14,0x0d,12)
+	VMOVAPD mem, Z30
+	ROUND1(c,d,a,b,15,0x0e,17)
+	VMOVAPD mem, Z31
 
-	ROUND1noload(b,c,d,a, 0x0f,22, Z17)
+	ROUND1noload(b,c,d,a, 0x0f,22)
 
 	VMOVAPD d, tmp
 	VMOVAPD d, tmp2
