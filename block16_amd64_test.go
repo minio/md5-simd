@@ -111,15 +111,17 @@ func TestBlock16Masked(t *testing.T) {
 	}
 
 	input := block16Inputs()
+	mask := uint64(0)
 
 	// Nil out every other input vector
 	for i := range input {
 		if (i & 1) == 1 {
 			input[i] = nil
+		} else {
+			mask |= 1 << (i)
 		}
 	}
-
-	const mask = 0x5555
+	t.Logf("Mask: %x", mask)
 
 	var s digest16
 	for i := 0; i < 16; i++ {
@@ -137,29 +139,43 @@ func TestBlock16Masked(t *testing.T) {
 		}
 	}
 
-	block16(&s.v0[0], uintptr(unsafe.Pointer(&(base[0]))), &bufs[0], mask, 64)
+	block16(&s.v0[0], uintptr(unsafe.Pointer(&base[0])), &bufs[0], mask, 64)
 
 	want :=
-		`00000000  82 3c 09 52 ac 1d 1f 03  65 ee 4c 82 ac 1d 1f 03  |.<.R....e.L.....|
-00000010  82 53 aa b9 ac 1d 1f 03  93 c7 ce 70 ac 1d 1f 03  |.S.........p....|
-00000020  4a 95 90 aa ac 1d 1f 03  59 b3 95 9f ac 1d 1f 03  |J.......Y.......|
-00000030  56 1d 88 66 ac 1d 1f 03  e4 41 2f 07 ac 1d 1f 03  |V..f.....A/.....|
-00000040  ab 71 57 fc d0 8e a5 6e  b5 a8 11 9a d0 8e a5 6e  |.qW....n.......n|
-00000050  41 b0 a7 71 d0 8e a5 6e  8c 23 80 fa d0 8e a5 6e  |A..q...n.#.....n|
-00000060  72 08 7e 17 d0 8e a5 6e  24 38 d1 44 d0 8e a5 6e  |r.~....n$8.D...n|
-00000070  bb 0a 2c c5 d0 8e a5 6e  bf 44 a2 1b d0 8e a5 6e  |..,....n.D.....n|
-00000080  9f 5d 41 c2 b7 67 ab 1f  36 3a 05 f9 b7 67 ab 1f  |.]A..g..6:...g..|
-00000090  e1 1c f8 67 b7 67 ab 1f  de 2e c6 c1 b7 67 ab 1f  |...g.g.......g..|
-000000a0  7c 0d c0 7d b7 67 ab 1f  60 f9 0e 11 b7 67 ab 1f  ||..}.g.......g..|
-000000b0  57 9d 20 80 b7 67 ab 1f  ec 7b 5d 2b b7 67 ab 1f  |W. ..g...{]+.g..|
-000000c0  06 db 9c fa 91 77 31 74  fc 1f f4 61 91 77 31 74  |.....w1t...a.w1t|
-000000d0  87 84 9f 50 91 77 31 74  01 a8 be fa 91 77 31 74  |...P.w1t.....w1t|
-000000e0  75 e1 ce 30 91 77 31 74  6d b4 1c e8 91 77 31 74  |u..0.w1tm....w1t|
-000000f0  7e 4d a1 cf 91 77 31 74  4a a7 0f 36 91 77 31 74  |~M...w1tJ..6.w1t|
+		`00000000  82 3c 09 52 01 23 45 67  65 ee 4c 82 01 23 45 67  |.<.R.#Ege.L..#Eg|
+00000010  82 53 aa b9 01 23 45 67  93 c7 ce 70 01 23 45 67  |.S...#Eg...p.#Eg|
+00000020  4a 95 90 aa 01 23 45 67  59 b3 95 9f 01 23 45 67  |J....#EgY....#Eg|
+00000030  56 1d 88 66 01 23 45 67  e4 41 2f 07 01 23 45 67  |V..f.#Eg.A/..#Eg|
+00000040  ab 71 57 fc 89 ab cd ef  b5 a8 11 9a 89 ab cd ef  |.qW.............|
+00000050  41 b0 a7 71 89 ab cd ef  8c 23 80 fa 89 ab cd ef  |A..q.....#......|
+00000060  72 08 7e 17 89 ab cd ef  24 38 d1 44 89 ab cd ef  |r.~.....$8.D....|
+00000070  bb 0a 2c c5 89 ab cd ef  bf 44 a2 1b 89 ab cd ef  |..,......D......|
+00000080  9f 5d 41 c2 fe dc ba 98  36 3a 05 f9 fe dc ba 98  |.]A.....6:......|
+00000090  e1 1c f8 67 fe dc ba 98  de 2e c6 c1 fe dc ba 98  |...g............|
+000000a0  7c 0d c0 7d fe dc ba 98  60 f9 0e 11 fe dc ba 98  ||..}............|
+000000b0  57 9d 20 80 fe dc ba 98  ec 7b 5d 2b fe dc ba 98  |W. ......{]+....|
+000000c0  06 db 9c fa 76 54 32 10  fc 1f f4 61 76 54 32 10  |....vT2....avT2.|
+000000d0  87 84 9f 50 76 54 32 10  01 a8 be fa 76 54 32 10  |...PvT2.....vT2.|
+000000e0  75 e1 ce 30 76 54 32 10  6d b4 1c e8 76 54 32 10  |u..0vT2.m...vT2.|
+000000f0  7e 4d a1 cf 76 54 32 10  4a a7 0f 36 76 54 32 10  |~M..vT2.J..6vT2.|
 `
 
 	state := [256]byte{}
 	for i := 0; i < 16; i++ {
+		if (i & 1) == 1 {
+			if s.v0[i] != init0 {
+				t.Errorf("v0 was changed at pos %d", i)
+			}
+			if s.v1[i] != init1 {
+				t.Errorf("v1 was changed at pos %d", i)
+			}
+			if s.v2[i] != init2 {
+				t.Errorf("v2 was changed at pos %d", i)
+			}
+			if s.v3[i] != init3 {
+				t.Errorf("v3 was changed at pos %d", i)
+			}
+		}
 		binary.LittleEndian.PutUint32(state[0x00+i*4:], s.v0[i])
 		binary.LittleEndian.PutUint32(state[0x40+i*4:], s.v1[i])
 		binary.LittleEndian.PutUint32(state[0x80+i*4:], s.v2[i])

@@ -60,15 +60,6 @@
 	VPXORQ     c, ones, tmp           \
 	VPADDD     b, a, a
 
-TEXT ·block16(SB), 4, $0-40
-
-	MOVQ  state+0(FP), BX
-	MOVQ  base+8(FP), SI
-	MOVQ  ptrs+16(FP), AX
-	KMOVQ mask+24(FP), K1
-	MOVQ  n+32(FP), DX
-	MOVQ  ·avx512md5consts+0(SB), DI
-
 #define a Z0
 #define b Z1
 #define c Z2
@@ -79,18 +70,26 @@ TEXT ·block16(SB), 4, $0-40
 #define sc Z6
 #define sd Z7
 
+#define kmask  K1
+#define ktmp K3
+
+TEXT ·block16(SB), 4, $0-40
+	MOVQ  state+0(FP), BX
+	MOVQ  base+8(FP), SI
+	MOVQ  ptrs+16(FP), AX
+	KMOVQ mask+24(FP), kmask
+	MOVQ  n+32(FP), DX
+	MOVQ  ·avx512md5consts+0(SB), DI
+
+	// ----------------------------------------------------------
+	// Registers Z16 through to Z31 are used for caching purposes
+	// ----------------------------------------------------------
+
 #define tmp       Z8
 #define tmp2      Z9
 #define ptrs     Z10
 #define ones     Z12
 #define mem      Z15
-
-#define kmask  K1
-#define ktmp   K3
-
-// ----------------------------------------------------------
-// Registers Z16 through to Z31 are used for caching purposes
-// ----------------------------------------------------------
 
 #define dig    BX
 #define count  DX
@@ -219,10 +218,11 @@ loop:
 	SUBQ $64, count
 	JNE  loop
 
-	VMOVUPD a, (dig)
-	VMOVUPD b, 0x40(dig)
-	VMOVUPD c, 0x80(dig)
-	VMOVUPD d, 0xc0(dig)
+	// Mask digest updates...
+	VMOVDQU32 a, kmask, (dig)
+	VMOVDQU32 b, kmask, 0x40(dig)
+	VMOVDQU32 c, kmask, 0x80(dig)
+	VMOVDQU32 d, kmask, 0xc0(dig)
 
 	VZEROUPPER
 	RET
