@@ -87,8 +87,8 @@ var avx512md5consts = func(c []uint32) []uint32 {
 }(md5consts[:])
 
 // Interface function to assembly code
-func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool) {
-	if hasAVX512 {
+func (s *md5Server) blockMd5_x16(d *digest16, input [16][]byte, half bool, useAVX512 bool) {
+	if hasAVX512 && useAVX512 {
 		blockMd5_avx512(d, input, s.allBufs, &s.maskRounds16)
 		return
 	}

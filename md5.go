@@ -22,6 +22,10 @@ type Server interface {
 	Close()
 }
 
+type ServerOptions struct {
+	UseAVX512 bool
+}
+
 type Hasher interface {
 	hash.Hash
 	Close()

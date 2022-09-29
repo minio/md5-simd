@@ -51,6 +51,7 @@ type lanesInfo [Lanes]blockInput
 
 // md5Server - Type to implement parallel handling of MD5 invocations
 type md5Server struct {
+	options      ServerOptions
 	uidCounter   uint64
 	cycle        chan uint64           // client with uid has update.
 	newInput     chan newClient        // Add new client.
@@ -68,10 +69,17 @@ type md5Server struct {
 
 // NewServer - Create new object for parallel processing handling
 func NewServer() Server {
+	return NewServerWithOptions(ServerOptions{
+		UseAVX512: true,
+	})
+}
+
+func NewServerWithOptions(opts ServerOptions) Server {
 	if !cpuid.CPU.Supports(cpuid.AVX2) {
 		return &fallbackServer{}
 	}
 	md5srv := &md5Server{}
+	md5srv.options = opts
 	md5srv.digests = make(map[uint64][Size]byte)
 	md5srv.newInput = make(chan newClient, Lanes)
 	md5srv.cycle = make(chan uint64, Lanes*10)
@@ -360,7 +368,7 @@ func (s *md5Server) blocks(lanes []blockInput) {
 	// Collect active digests...
 	state := s.getDigests(lanes)
 	// Process all lanes...
-	s.blockMd5_x16(&state, inputs, len(lanes) <= 8)
+	s.blockMd5_x16(&state, inputs, len(lanes) <= 8, s.options.UseAVX512)
 
 	for i, lane := range lanes {
 		uid := lane.uid
