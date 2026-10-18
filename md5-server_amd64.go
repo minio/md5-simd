@@ -142,6 +142,7 @@ func (s *md5Server) process(newClients chan newClient) {
 				if !ok {
 					// Client disconnected
 					delete(clients, uid)
+					delete(s.digests, uid)
 					return
 				}
 				if block.uid != uid {
