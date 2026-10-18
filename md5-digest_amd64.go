@@ -119,6 +119,13 @@ func (d *md5Digest) Close() {
 	if d.blocksCh != nil {
 		close(d.blocksCh)
 		d.blocksCh = nil
+		// Let the server drop the hasher now instead of on the next write
+		// of another hasher. When the channel is full the server is busy
+		// and will find the closed channel by itself.
+		select {
+		case d.cycleServer <- d.uid:
+		default:
+		}
 	}
 }
 
