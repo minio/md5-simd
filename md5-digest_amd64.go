@@ -16,13 +16,14 @@ import (
 
 // md5Digest - Type for computing MD5 using either AVX2 or AVX512
 type md5Digest struct {
-	uid         uint64
-	blocksCh    chan blockInput
-	cycleServer chan uint64
-	x           [BlockSize]byte
-	nx          int
-	len         uint64
-	buffers     <-chan []byte
+	uid           uint64
+	blocksCh      chan blockInput
+	cycleServer   chan uint64
+	closedNotSent *uint32 // the server's closedNotSent
+	x             [BlockSize]byte
+	nx            int
+	len           uint64
+	buffers       <-chan []byte
 }
 
 // NewHash - initialize instance for Md5 implementation.
@@ -34,10 +35,11 @@ func (s *md5Server) NewHash() Hasher {
 		input: blockCh,
 	}
 	return &md5Digest{
-		uid:         uid,
-		buffers:     s.buffers,
-		blocksCh:    blockCh,
-		cycleServer: s.cycle,
+		uid:           uid,
+		buffers:       s.buffers,
+		blocksCh:      blockCh,
+		cycleServer:   s.cycle,
+		closedNotSent: &s.closedNotSent,
 	}
 }
 
@@ -120,11 +122,17 @@ func (d *md5Digest) Close() {
 		close(d.blocksCh)
 		d.blocksCh = nil
 		// Let the server drop the hasher now instead of on the next write
-		// of another hasher. When the channel is full the server is busy
-		// and will find the closed channel by itself.
+		// of another hasher. When the channel is full, mark the server so
+		// that it looks at all hashers before it waits, then try again: if
+		// the channel is still full, the server reads it after the mark.
 		select {
 		case d.cycleServer <- d.uid:
 		default:
+			atomic.StoreUint32(d.closedNotSent, 1)
+			select {
+			case d.cycleServer <- d.uid:
+			default:
+			}
 		}
 	}
 }

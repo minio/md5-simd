@@ -342,3 +342,42 @@ func TestCloseRemovesDigest(t *testing.T) {
 		t.Errorf("server keeps %d digests after closing %d hashers, want 1 (the open hasher)", got, 3*n)
 	}
 }
+
+// TestCloseWithFullCycle checks that an idle server forgets a hasher that was
+// closed when the cycle channel was full, so that Close could not send its uid.
+func TestCloseWithFullCycle(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX2) {
+		t.Skip("fallback server")
+	}
+	s := newMd5Server(ServerOptions{UseAVX512: true})
+	done := make(chan struct{})
+	go func() {
+		s.process(s.newInput)
+		close(done)
+	}()
+	waitCycleEmpty := func() {
+		for len(s.cycle) > 0 {
+			runtime.Gosched()
+		}
+	}
+
+	h := s.NewHash()
+	h.Write(bytes.Repeat([]byte{0x61}, 3*BlockSize+7))
+	h.Sum(nil)
+	waitCycleEmpty() // no uid of h is queued any more
+
+	// A channel that nobody reads is always full.
+	h.(*md5Digest).cycleServer = make(chan uint64)
+	h.Close()
+	// The server reads only a stale uid, which does not fill a lane.
+	s.cycle <- 0
+	waitCycleEmpty()
+
+	// The server returns only from a wait, after it has handled the stale
+	// uid, so after done the map can be read without a race.
+	s.Close()
+	<-done
+	if got := len(s.digests); got != 0 {
+		t.Errorf("server keeps %d digests of closed hashers, want 0", got)
+	}
+}
