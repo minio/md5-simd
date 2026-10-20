@@ -8,6 +8,7 @@ package md5simd
 
 import (
 	"bytes"
+	"crypto/md5"
 	"hash"
 	"runtime"
 	"sync"
@@ -288,4 +289,95 @@ func BenchmarkAvx2SingleWriter(b *testing.B) {
 	})
 
 	hasAVX512 = restore
+}
+
+// TestCloseRemovesDigest checks that the server forgets a hasher when it is
+// closed, also when Sum was called and Reset was not.
+func TestCloseRemovesDigest(t *testing.T) {
+	server := NewServer()
+	t.Cleanup(server.Close)
+	s, ok := server.(*md5Server)
+	if !ok {
+		t.Skip("fallback server")
+	}
+	input := bytes.Repeat([]byte{0x61}, 3*BlockSize+7)
+	want := md5.Sum(input)
+	const n = 1000
+
+	// Sum, then Close.
+	for i := 0; i < n; i++ {
+		h := server.NewHash()
+		h.Write(input)
+		if got := h.Sum(nil); !bytes.Equal(got, want[:]) {
+			t.Fatalf("got %x, want %x", got, want)
+		}
+		h.Close()
+	}
+	// Close with a block still queued.
+	for i := 0; i < n; i++ {
+		h := server.NewHash()
+		h.Write(input)
+		h.Close()
+	}
+	// The server answers a Sum only after a processing pass, and every pass
+	// either drops all closed hashers it still knows (it scans its clients
+	// until it has no more clients than lanes) or makes progress on at
+	// least 16 of them. The 1000 rounds give it far more passes than the
+	// 2000 it could need, so when the probe's Sum returns the server knows
+	// only the probe and touches the map no more: it can be read without
+	// a race.
+	for i := 0; i < n; i++ {
+		h := server.NewHash()
+		h.Write(input)
+		if got := h.Sum(nil); !bytes.Equal(got, want[:]) {
+			t.Fatalf("got %x, want %x", got, want)
+		}
+		h.Close()
+	}
+	probe := server.NewHash()
+	defer probe.Close()
+	probe.Write(input)
+	probe.Sum(nil)
+	if got := len(s.digests); got != 1 {
+		t.Errorf("server keeps %d digests after closing %d hashers, want 1 (the open hasher)", got, 3*n)
+	}
+}
+
+// TestCloseWithFullCycle checks that an idle server forgets a hasher that was
+// closed when the cycle channel was full, so that Close could not send its uid.
+func TestCloseWithFullCycle(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX2) {
+		t.Skip("fallback server")
+	}
+	s := newMd5Server(ServerOptions{UseAVX512: true})
+	done := make(chan struct{})
+	go func() {
+		s.process(s.newInput)
+		close(done)
+	}()
+	waitCycleEmpty := func() {
+		for len(s.cycle) > 0 {
+			runtime.Gosched()
+		}
+	}
+
+	h := s.NewHash()
+	h.Write(bytes.Repeat([]byte{0x61}, 3*BlockSize+7))
+	h.Sum(nil)
+	waitCycleEmpty() // no uid of h is queued any more
+
+	// A channel that nobody reads is always full.
+	h.(*md5Digest).cycleServer = make(chan uint64)
+	h.Close()
+	// The server reads only a stale uid, which does not fill a lane.
+	s.cycle <- 0
+	waitCycleEmpty()
+
+	// The server returns only from a wait, after it has handled the stale
+	// uid, so after done the map can be read without a race.
+	s.Close()
+	<-done
+	if got := len(s.digests); got != 0 {
+		t.Errorf("server keeps %d digests of closed hashers, want 0", got)
+	}
 }

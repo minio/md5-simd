@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/klauspost/cpuid/v2"
 )
@@ -51,16 +52,17 @@ type lanesInfo [Lanes]blockInput
 
 // md5Server - Type to implement parallel handling of MD5 invocations
 type md5Server struct {
-	options      ServerOptions
-	uidCounter   uint64
-	cycle        chan uint64           // client with uid has update.
-	newInput     chan newClient        // Add new client.
-	digests      map[uint64][Size]byte // Map of uids to (interim) digest results
-	maskRounds16 [16]maskRounds        // Pre-allocated static array for max 16 rounds
-	maskRounds8a [8]maskRounds         // Pre-allocated static array for max 8 rounds (1st AVX2 core)
-	maskRounds8b [8]maskRounds         // Pre-allocated static array for max 8 rounds (2nd AVX2 core)
-	allBufs      []byte                // Preallocated buffer.
-	buffers      chan []byte           // Preallocated buffers, sliced from allBufs.
+	options       ServerOptions
+	uidCounter    uint64
+	closedNotSent uint32                // set by a closed hasher that could not send on cycle
+	cycle         chan uint64           // client with uid has update.
+	newInput      chan newClient        // Add new client.
+	digests       map[uint64][Size]byte // Map of uids to (interim) digest results
+	maskRounds16  [16]maskRounds        // Pre-allocated static array for max 16 rounds
+	maskRounds8a  [8]maskRounds         // Pre-allocated static array for max 8 rounds (1st AVX2 core)
+	maskRounds8b  [8]maskRounds         // Pre-allocated static array for max 8 rounds (2nd AVX2 core)
+	allBufs       []byte                // Preallocated buffer.
+	buffers       chan []byte           // Preallocated buffers, sliced from allBufs.
 
 	i8       [2][8][]byte // avx2 temporary vars
 	d8a, d8b digest8
@@ -78,6 +80,14 @@ func NewServerWithOptions(opts ServerOptions) Server {
 	if !cpuid.CPU.Supports(cpuid.AVX2) {
 		return &fallbackServer{}
 	}
+	md5srv := newMd5Server(opts)
+	// Start a single thread for reading from the input channel
+	go md5srv.process(md5srv.newInput)
+	return md5srv
+}
+
+// newMd5Server returns a server that does not process input yet.
+func newMd5Server(opts ServerOptions) *md5Server {
 	md5srv := &md5Server{}
 	md5srv.options = opts
 	md5srv.digests = make(map[uint64][Size]byte)
@@ -91,9 +101,6 @@ func NewServerWithOptions(opts ServerOptions) Server {
 		s := 32 + i*internalBlockSize
 		md5srv.buffers <- md5srv.allBufs[s : s+internalBlockSize : s+internalBlockSize]
 	}
-
-	// Start a single thread for reading from the input channel
-	go md5srv.process(md5srv.newInput)
 	return md5srv
 }
 
@@ -142,6 +149,7 @@ func (s *md5Server) process(newClients chan newClient) {
 				if !ok {
 					// Client disconnected
 					delete(clients, uid)
+					delete(s.digests, uid)
 					return
 				}
 				if block.uid != uid {
@@ -205,6 +213,16 @@ func (s *md5Server) process(newClients chan newClient) {
 	for {
 		// Step 1.
 		for lanesFilled == 0 {
+			if atomic.SwapUint32(&s.closedNotSent, 0) != 0 {
+				// A closed hasher could not tell us its uid: find it.
+				for uid := range clients {
+					addToLane(uid)
+					if allLanesFilled() {
+						break
+					}
+				}
+				continue
+			}
 			select {
 			case cl, ok := <-newClients:
 				if !ok {
